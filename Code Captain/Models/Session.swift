@@ -1,5 +1,75 @@
 import Foundation
 
+struct SessionTodo: Identifiable, Codable, Hashable {
+    let id: String
+    let content: String
+    let status: TodoStatus
+    let priority: TodoPriority
+    let createdAt: Date
+    var completedAt: Date?
+    
+    init(id: String, content: String, status: TodoStatus, priority: TodoPriority, completedAt: Date? = nil) {
+        self.id = id
+        self.content = content
+        self.status = status
+        self.priority = priority
+        self.createdAt = Date()
+        self.completedAt = completedAt
+    }
+}
+
+enum TodoStatus: String, CaseIterable, Codable {
+    case pending = "pending"
+    case inProgress = "in_progress"
+    case completed = "completed"
+    
+    var displayName: String {
+        switch self {
+        case .pending: return "Pending"
+        case .inProgress: return "In Progress"
+        case .completed: return "Completed"
+        }
+    }
+    
+    var systemImageName: String {
+        switch self {
+        case .pending: return "circle"
+        case .inProgress: return "clock"
+        case .completed: return "checkmark.circle.fill"
+        }
+    }
+}
+
+enum TodoPriority: String, CaseIterable, Codable {
+    case low = "low"
+    case medium = "medium"
+    case high = "high"
+    
+    var displayName: String {
+        switch self {
+        case .low: return "Low"
+        case .medium: return "Medium"
+        case .high: return "High"
+        }
+    }
+    
+    var systemImageName: String {
+        switch self {
+        case .low: return "arrow.down.circle"
+        case .medium: return "minus.circle"
+        case .high: return "arrow.up.circle"
+        }
+    }
+    
+    var color: String {
+        switch self {
+        case .low: return "blue"
+        case .medium: return "secondary"
+        case .high: return "orange"
+        }
+    }
+}
+
 enum SessionPriority: String, CaseIterable, Codable {
     case low = "low"
     case medium = "medium"
@@ -56,6 +126,9 @@ struct Session: Identifiable, Codable, Hashable {
     var parentSessionId: UUID?
     var dependentSessionIds: [UUID]
     
+    // Todo management
+    var todos: [SessionTodo]
+    
     init(projectId: UUID, name: String, branchName: String? = nil, priority: SessionPriority = .medium, description: String = "", tags: [String] = []) {
         self.id = UUID()
         self.projectId = projectId
@@ -77,6 +150,7 @@ struct Session: Identifiable, Codable, Hashable {
         self.completedAt = nil
         self.parentSessionId = nil
         self.dependentSessionIds = []
+        self.todos = []
     }
     
     var displayName: String {
@@ -162,6 +236,42 @@ struct Session: Identifiable, Codable, Hashable {
     
     var hasProviderSession: Bool {
         return providerSessionId != nil
+    }
+    
+    // MARK: - Todo Management
+    
+    mutating func updateTodos(_ newTodos: [SessionTodo]) {
+        self.todos = newTodos
+        self.lastActiveAt = Date()
+    }
+    
+    mutating func addTodo(_ todo: SessionTodo) {
+        // Replace existing todo with same id or add new one
+        if let index = todos.firstIndex(where: { $0.id == todo.id }) {
+            todos[index] = todo
+        } else {
+            todos.append(todo)
+        }
+        self.lastActiveAt = Date()
+    }
+    
+    mutating func removeTodo(withId id: String) {
+        todos.removeAll { $0.id == id }
+        self.lastActiveAt = Date()
+    }
+    
+    
+    var completedTodosCount: Int {
+        todos.filter { $0.status == .completed }.count
+    }
+    
+    var totalTodosCount: Int {
+        todos.count
+    }
+    
+    var todoProgress: Double {
+        guard totalTodosCount > 0 else { return 0 }
+        return Double(completedTodosCount) / Double(totalTodosCount)
     }
 }
 

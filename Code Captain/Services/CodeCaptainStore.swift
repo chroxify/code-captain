@@ -8,6 +8,7 @@ class CodeCaptainStore: ObservableObject {
     @Published var sessions: [Session] = []
     @Published var selectedProject: Project?
     @Published var selectedSession: Session?
+    @Published var selectedSessionId: UUID?
     @Published var isLoading = false
     @Published var error: String?
     
@@ -40,6 +41,36 @@ class CodeCaptainStore: ObservableObject {
             .compactMap { $0.first }
             .filter { [weak self] _ in self?.selectedProject == nil }
             .assign(to: &$selectedProject)
+        
+        // Keep selectedSession in sync with sessions updates and selectedSessionId
+        sessionService.$sessions
+            .combineLatest($selectedSessionId)
+            .compactMap { sessions, selectedSessionId in
+                guard let selectedSessionId = selectedSessionId else { return nil }
+                return sessions.first { $0.id == selectedSessionId }
+            }
+            .assign(to: &$selectedSession)
+        
+        // Handle selectedSessionId changes from UI selection (async to avoid publish cycles)
+        $selectedSessionId
+            .compactMap { $0 }
+            .removeDuplicates()
+            .sink { [weak self] sessionId in
+                guard let self = self else { return }
+                
+                // Find the session and update related state asynchronously
+                if let session = self.sessions.first(where: { $0.id == sessionId }),
+                   self.selectedSession?.id != session.id {
+                    
+                    // Update selectedProject asynchronously to avoid publish cycles
+                    Task { @MainActor in
+                        if let project = self.projects.first(where: { $0.id == session.projectId }) {
+                            self.selectedProject = project
+                        }
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Project Management
@@ -63,6 +94,8 @@ class CodeCaptainStore: ObservableObject {
             
             // Auto-select the new project
             selectedProject = project
+            selectedSession = nil
+            selectedSessionId = nil
             logger.debug("Auto-selected new project: \(project.name)", category: .app)
             
             logger.info("Successfully added project: '\(name)'", category: .app)
@@ -88,6 +121,8 @@ class CodeCaptainStore: ObservableObject {
             // Clear selection if this was the selected project
             if selectedProject?.id == project.id {
                 selectedProject = projects.first
+                selectedSession = nil
+                selectedSessionId = nil
             }
             
         } catch {
@@ -106,6 +141,7 @@ class CodeCaptainStore: ObservableObject {
         do {
             let session = try await sessionService.createSession(for: project, name: name)
             selectedSession = session
+            selectedSessionId = session.id
             
         } catch {
             self.error = error.localizedDescription
@@ -120,6 +156,7 @@ class CodeCaptainStore: ObservableObject {
         do {
             try await sessionService.initializeSession(session)
             selectedSession = session
+            selectedSessionId = session.id
             
         } catch {
             self.error = error.localizedDescription
@@ -137,7 +174,9 @@ class CodeCaptainStore: ObservableObject {
             
             // Clear selection if this was the selected session
             if selectedSession?.id == session.id {
-                selectedSession = getSessionsForProject(selectedProject)?.first
+                let firstSession = getSessionsForProject(selectedProject)?.first
+                selectedSession = firstSession
+                selectedSessionId = firstSession?.id
             }
             
         } catch {
@@ -283,13 +322,16 @@ class CodeCaptainStore: ObservableObject {
         // Auto-select first session for this project
         if let firstSession = getSessionsForProject(project)?.first {
             selectedSession = firstSession
+            selectedSessionId = firstSession.id
         } else {
             selectedSession = nil
+            selectedSessionId = nil
         }
     }
     
     func selectSession(_ session: Session) {
         selectedSession = session
+        selectedSessionId = session.id
         
         // Auto-select the project for this session
         if let project = projects.first(where: { $0.id == session.projectId }) {

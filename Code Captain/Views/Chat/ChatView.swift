@@ -1368,39 +1368,7 @@ struct ChatInputView: View {
 }
 
 
-struct TodoSectionView: View {
-    let session: Session?
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text("TODOs")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlColor))
-            
-            Divider()
-            
-            // Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("TODOs will be extracted from Claude responses")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding()
-                }
-            }
-            .background(Color(NSColor.controlBackgroundColor))
-        }
-    }
-}
-
-// Old terminal implementation removed - now using SwiftTerminalSectionView with SwiftTerm
+// TodoSectionView and TodoItemView moved to Inspector/TodoSectionView.swift
 
 #Preview {
     ChatView(sessionId: UUID(), store: CodeCaptainStore())

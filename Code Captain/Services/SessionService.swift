@@ -134,6 +134,9 @@ class SessionService: ObservableObject {
                 updatedSession.addMessage(assistantMessage)
             }
             
+            // Extract todos from messages (provider-agnostic)
+            await extractTodosFromMessages(for: &updatedSession)
+            
             // Always update session ID from response (this is critical for session continuity)
             if let newSessionId = response.sessionId, !newSessionId.isEmpty {
                 let currentSessionId = updatedSession.providerSessionId
@@ -314,6 +317,9 @@ class SessionService: ObservableObject {
                         }
                     }
                     
+                    // Extract todos from the current streaming message immediately for real-time updates
+                    await extractTodosFromStreamingMessage(sdkMessage, for: &updatedSession)
+                    
                     await updateSession(updatedSession)
                     
                     // Yield the message immediately
@@ -361,6 +367,186 @@ class SessionService: ObservableObject {
     
     func getSessionsForProject(_ project: Project) -> [Session] {
         return sessions.filter { $0.projectId == project.id }
+    }
+    
+    // MARK: - Todo Management
+    
+    private func extractTodosFromStreamingMessage(_ sdkMessage: SDKMessage, for session: inout Session) async {
+        // Extract todos from the current streaming message immediately for real-time updates
+        switch sdkMessage {
+        case .assistant(let assistantMessage):
+            // Look for tool_use blocks in assistant messages
+            for contentBlock in assistantMessage.message.content {
+                if case .toolUse(let toolUse) = contentBlock,
+                   toolUse.name == "TodoWrite" {
+                    // Extract todos from TodoWrite tool call
+                    if let newTodos = extractTodosFromToolUse(toolUse) {
+                        // Merge with existing todos to preserve completion dates
+                        let updatedTodos = mergeTodosPreservingCompletionDates(newTodos: newTodos, existingTodos: session.todos)
+                        
+                        // Update session with merged todos immediately
+                        session.updateTodos(updatedTodos)
+                        
+                        if newTodos.isEmpty {
+                            print("DEBUG: Cleared all todos from streaming message: \(sdkMessage.id)")
+                        } else {
+                            print("DEBUG: Extracted \(newTodos.count) todos from streaming message: \(sdkMessage.id)")
+                        }
+                    }
+                }
+            }
+        default:
+            // Only assistant messages contain tool_use blocks
+            break
+        }
+    }
+    
+    private func extractTodosFromMessages(for session: inout Session) async {
+        // Extract todos from all messages in the session
+        var allTodos: [SessionTodo] = []
+        
+        for message in session.messages {
+            if let sdkMessage = message.sdkMessage {
+                switch sdkMessage {
+                case .assistant(let assistantMessage):
+                    // Look for tool_use blocks in assistant messages
+                    for contentBlock in assistantMessage.message.content {
+                        if case .toolUse(let toolUse) = contentBlock,
+                           toolUse.name == "TodoWrite" {
+                            // Extract todos from TodoWrite tool call
+                            if let todos = extractTodosFromToolUse(toolUse) {
+                                allTodos.append(contentsOf: todos)
+                            }
+                        }
+                    }
+                default:
+                    // Only assistant messages contain tool_use blocks
+                    break
+                }
+            }
+        }
+        
+        // Update session with extracted todos
+        if !allTodos.isEmpty {
+            session.updateTodos(allTodos)
+            print("DEBUG: Extracted \(allTodos.count) todos from session messages")
+        }
+    }
+    
+    private func extractTodosFromToolUse(_ toolUse: ToolUseBlock) -> [SessionTodo]? {
+        // Parse the TodoWrite tool input to extract todos
+        guard let todosArray = toolUse.input["todos"]?.value as? [[String: Any]] else {
+            return nil
+        }
+        
+        var todos: [SessionTodo] = []
+        
+        for todoDict in todosArray {
+            guard let id = todoDict["id"] as? String,
+                  let content = todoDict["content"] as? String,
+                  let statusString = todoDict["status"] as? String,
+                  let priorityString = todoDict["priority"] as? String,
+                  let status = TodoStatus(rawValue: statusString),
+                  let priority = TodoPriority(rawValue: priorityString) else {
+                continue
+            }
+            
+            let todo = SessionTodo(id: id, content: content, status: status, priority: priority)
+            todos.append(todo)
+        }
+        
+        // Always return the array (even if empty) to allow for todo clearing
+        // An empty array means "clear all todos" which is different from nil (invalid/no TodoWrite call)
+        return todos
+    }
+    
+    private func mergeTodosPreservingCompletionDates(newTodos: [SessionTodo], existingTodos: [SessionTodo]) -> [SessionTodo] {
+        // The new TodoWrite call represents the complete, authoritative list of todos
+        // Any todo not in this list should be deleted (which happens automatically by only returning newTodos)
+        // But we need to preserve completion dates for todos that remain
+        
+        // Create a map of existing todos by ID for efficient lookup
+        let existingTodoMap = Dictionary(uniqueKeysWithValues: existingTodos.map { ($0.id, $0) })
+        
+        var mergedTodos: [SessionTodo] = []
+        
+        // Process each todo in the new authoritative list
+        for newTodo in newTodos {
+            var finalTodo = newTodo
+            
+            // Check if this todo existed before
+            if let existingTodo = existingTodoMap[newTodo.id] {
+                // If the todo was previously completed and is still completed, preserve the completion date
+                if existingTodo.status == .completed && newTodo.status == .completed {
+                    finalTodo = SessionTodo(
+                        id: newTodo.id,
+                        content: newTodo.content,
+                        status: newTodo.status,
+                        priority: newTodo.priority,
+                        completedAt: existingTodo.completedAt
+                    )
+                }
+                // If the todo is newly completed, set completion date to now
+                else if existingTodo.status != .completed && newTodo.status == .completed {
+                    finalTodo = SessionTodo(
+                        id: newTodo.id,
+                        content: newTodo.content,
+                        status: newTodo.status,
+                        priority: newTodo.priority,
+                        completedAt: Date()
+                    )
+                }
+                // If the todo was completed but is now uncompleted, clear completion date
+                else if existingTodo.status == .completed && newTodo.status != .completed {
+                    finalTodo = SessionTodo(
+                        id: newTodo.id,
+                        content: newTodo.content,
+                        status: newTodo.status,
+                        priority: newTodo.priority,
+                        completedAt: nil
+                    )
+                }
+                // For any other status changes, preserve the existing completion date if any
+                else {
+                    finalTodo = SessionTodo(
+                        id: newTodo.id,
+                        content: newTodo.content,
+                        status: newTodo.status,
+                        priority: newTodo.priority,
+                        completedAt: existingTodo.completedAt
+                    )
+                }
+            }
+            // If this is a completely new todo that's already completed, set completion date
+            else if newTodo.status == .completed {
+                finalTodo = SessionTodo(
+                    id: newTodo.id,
+                    content: newTodo.content,
+                    status: newTodo.status,
+                    priority: newTodo.priority,
+                    completedAt: Date()
+                )
+            }
+            
+            mergedTodos.append(finalTodo)
+        }
+        
+        // Log deletion information for debugging
+        let deletedTodos = existingTodos.filter { existingTodo in
+            !newTodos.contains { $0.id == existingTodo.id }
+        }
+        
+        if !deletedTodos.isEmpty {
+            if newTodos.isEmpty {
+                print("DEBUG: Clearing all \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })")
+            } else {
+                print("DEBUG: Deleting \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })")
+            }
+        }
+        
+        // Return only the todos that are in the new authoritative list
+        // This effectively deletes any todos not present in newTodos
+        return mergedTodos
     }
     
     // MARK: - Persistence
