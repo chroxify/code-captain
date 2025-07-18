@@ -109,58 +109,13 @@ struct ChatHeaderView: View {
                 
                 Spacer()
                 
-                // Control buttons
+                // Session status indicator
                 HStack(spacing: 12) {
-                    if session.state == .active {
-                        Button(action: {
-                            Task {
-                                await store.pauseSession(session)
-                            }
-                        }) {
-                            Image(systemName: "pause.circle")
-                                .font(.title2)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Pause session")
-                        
-                        Button(action: {
-                            Task {
-                                await store.stopSession(session)
-                            }
-                        }) {
-                            Image(systemName: "stop.circle")
-                                .font(.title2)
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Stop session")
-                        
-                    } else if session.state == .paused {
-                        Button(action: {
-                            Task {
-                                await store.resumeSession(session)
-                            }
-                        }) {
-                            Image(systemName: "play.circle")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Resume session")
-                        
-                    } else if session.canStart {
-                        Button(action: {
-                            Task {
-                                await store.startSession(session)
-                            }
-                        }) {
-                            Image(systemName: "play.circle")
-                                .font(.title2)
-                                .foregroundColor(.green)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help("Start session")
-                    }
+                    LiveActivityIndicator(state: session.state)
+                    
+                    Text(session.state.displayName)
+                        .font(.caption)
+                        .foregroundColor(colorForState(session.state))
                 }
             }
             .padding()
@@ -171,11 +126,13 @@ struct ChatHeaderView: View {
     private func colorForState(_ state: SessionState) -> Color {
         switch state {
         case .idle: return .secondary
-        case .starting: return .orange
-        case .active: return .green
-        case .paused: return .yellow
-        case .stopping: return .orange
+        case .processing: return .orange
+        case .waitingForInput: return .yellow
+        case .readyForReview: return .green
         case .error: return .red
+        case .queued: return .blue
+        case .archived: return .brown
+        case .failed: return .red
         }
     }
 }
@@ -1362,23 +1319,27 @@ struct ChatInputView: View {
     private var placeholderText: String {
         switch session.state {
         case .idle:
-            return "Click start to begin session"
-        case .starting:
-            return "Starting Claude Code..."
-        case .active:
             return "Message"
-        case .stopping:
-            return "Stopping session..."
-        case .paused:
-            return "Session paused - resume to send messages"
+        case .processing:
+            return "Processing..."
+        case .waitingForInput:
+            return "Waiting for your input"
+        case .readyForReview:
+            return "Ready - send next message"
         case .error:
             return "Session error - check logs"
+        case .queued:
+            return "Session queued - waiting to start"
+        case .archived:
+            return "Session archived - unarchive to send messages"
+        case .failed:
+            return "Session failed - check logs"
         }
     }
     
     private var canSendMessage: Bool {
         let hasText = !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let sessionReady = session.isActive || session.state == .starting
+        let sessionReady = session.canSendMessage
         
         return hasText && sessionReady
     }
@@ -1391,7 +1352,7 @@ struct ChatInputView: View {
         
         Task {
             // Use streaming if available
-            if session.state == .active {
+            if session.canSendMessage {
                 let messageStream = store.sendMessageStream(message, to: session)
                 for await streamedMessage in messageStream {
                     print("DEBUG: Received streamed message: \(streamedMessage.id)")

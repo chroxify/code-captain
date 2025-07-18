@@ -27,12 +27,12 @@ struct Project: Identifiable, Codable, Hashable {
         name.isEmpty ? path.lastPathComponent : name
     }
     
-    var activeSessions: [Session] {
-        sessions.filter { $0.state == .active }
+    var processingSessions: [Session] {
+        sessions.filter { $0.state == .processing }
     }
     
-    var hasActiveSessions: Bool {
-        !activeSessions.isEmpty
+    var hasProcessingSessions: Bool {
+        !processingSessions.isEmpty
     }
 }
 

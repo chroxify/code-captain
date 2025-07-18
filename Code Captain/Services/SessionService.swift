@@ -23,7 +23,7 @@ class SessionService: ObservableObject {
         let branchName = try await projectService.createBranch(name: name, for: project)
         
         // Create session
-        let session = Session(projectId: project.id, name: name, branchName: branchName)
+        let session = Session(projectId: project.id, name: name, branchName: branchName, priority: .medium, description: "", tags: [])
         
         // Add to sessions list on main thread
         await MainActor.run {
@@ -36,42 +36,33 @@ class SessionService: ObservableObject {
         updatedProject.sessions.append(session)
         await projectService.updateProject(updatedProject)
         
-        // Auto-start Claude Code session (it's interactive by nature)
-        try await startSession(session)
+        // Initialize Claude Code session (it's interactive by nature)
+        try await initializeSession(session)
         
         return session
     }
     
-    func startSession(_ session: Session) async throws {
-        guard session.canStart else {
+    func initializeSession(_ session: Session) async throws {
+        guard session.state == .idle else {
             throw SessionError.invalidStateTransition
         }
-        
-        // Update session state on main thread
-        var updatedSession = session
-        updatedSession.updateState(.starting)
-        await updateSession(updatedSession)
         
         // Get project for session
         guard let project = await getProject(for: session) else {
             throw SessionError.projectNotFound
         }
         
+        var updatedSession = session
+        
         do {
-            // Create or resume provider session
-            let sessionId: String
-            if let existingSessionId = session.providerSessionId {
-                sessionId = existingSessionId
-            } else {
-                sessionId = try await providerService.createSession(using: project.providerType, in: project.gitWorktreePath)
+            // Create provider session if needed
+            if session.providerSessionId == nil {
+                let sessionId = try await providerService.createSession(using: project.providerType, in: project.gitWorktreePath)
                 updatedSession.setProviderSessionId(sessionId)
+                await updateSession(updatedSession)
             }
             
-            // Update session state
-            updatedSession.updateState(.active)
-            await updateSession(updatedSession)
-            
-            print("DEBUG: SessionService(\(instanceId)) started session \(session.id) with provider session ID: \(sessionId)")
+            print("DEBUG: SessionService(\(instanceId)) initialized session \(session.id) with provider session ID: \(session.providerSessionId ?? "none")")
             
         } catch {
             updatedSession.updateState(.error)
@@ -80,66 +71,26 @@ class SessionService: ObservableObject {
         }
     }
     
-    func stopSession(_ session: Session) async throws {
-        guard session.canStop else {
-            throw SessionError.invalidStateTransition
-        }
-        
-        // Update session state on main thread
-        var updatedSession = session
-        updatedSession.updateState(.stopping)
-        await updateSession(updatedSession)
-        
-        // Claude Code sessions are stateless, so we just update the UI state
-        updatedSession.updateState(.idle)
-        await updateSession(updatedSession)
-        
-        print("DEBUG: SessionService(\(instanceId)) stopped session \(session.id)")
-    }
     
-    func pauseSession(_ session: Session) async throws {
-        guard session.state == .active else {
-            throw SessionError.invalidStateTransition
-        }
-        
-        // Update session state on main thread
-        var updatedSession = session
-        updatedSession.updateState(.paused)
-        await updateSession(updatedSession)
-        
-        // Claude Code CLI doesn't support pause/resume
-        // Just update the UI state
-        print("DEBUG: SessionService(\(instanceId)) paused session \(session.id)")
-    }
     
-    func resumeSession(_ session: Session) async throws {
-        guard session.state == .paused else {
-            throw SessionError.invalidStateTransition
-        }
-        
-        // Update session state on main thread
-        var updatedSession = session
-        updatedSession.updateState(.active)
-        await updateSession(updatedSession)
-        
-        // Claude Code CLI doesn't support pause/resume
-        // Just update the UI state
-        print("DEBUG: SessionService(\(instanceId)) resumed session \(session.id)")
-    }
     
     func sendMessage(_ content: String, to session: Session) async throws {
-        guard session.state == .active else {
-            print("DEBUG: Cannot send message - session not active. State: \(session.state)")
+        guard session.canSendMessage else {
+            print("DEBUG: Cannot send message - session cannot receive messages. State: \(session.state)")
             throw SessionError.sessionNotActive
         }
+        
+        // Update session to processing state
+        var updatedSession = session
+        updatedSession.updateState(.processing)
+        await updateSession(updatedSession)
         
         print("DEBUG: SessionService(\(instanceId)) sending message to session \(session.id): \(content)")
         
         // Create user message
         let userMessage = Message(sessionId: session.id, content: content, role: .user)
         
-        // Add message to session on main thread
-        var updatedSession = session
+        // Add message to session
         updatedSession.addMessage(userMessage)
         await updateSession(updatedSession)
         
@@ -194,6 +145,8 @@ class SessionService: ObservableObject {
                 }
             }
             
+            // Update session to ready for review state
+            updatedSession.updateState(.readyForReview)
             await updateSession(updatedSession)
             
             print("DEBUG: Message sent to Claude Code successfully")
@@ -205,7 +158,7 @@ class SessionService: ObservableObject {
             if error.localizedDescription.contains("No conversation found") {
                 
                 print("DEBUG: Session ID invalid, clearing and creating new session")
-                updatedSession.setProviderSessionId(nil)
+                updatedSession.setProviderSessionId(nil as String?)
                 await updateSession(updatedSession)
                 
                 // Try to create a new session
@@ -227,10 +180,7 @@ class SessionService: ObservableObject {
     }
     
     func deleteSession(_ session: Session) async throws {
-        // Stop session if active
-        if session.isActive {
-            try await stopSession(session)
-        }
+        // Sessions are always conceptually active, no need to stop
         
         // Remove from sessions list on main thread
         await MainActor.run {
@@ -248,14 +198,62 @@ class SessionService: ObservableObject {
         // Note: Claude Code sessions are managed externally
     }
     
+    func queueSession(_ session: Session) async throws {
+        guard session.canQueue else {
+            throw SessionError.invalidStateTransition
+        }
+        
+        // Update session state on main thread
+        var updatedSession = session
+        updatedSession.updateState(.queued)
+        await updateSession(updatedSession)
+        
+        print("DEBUG: SessionService(\(instanceId)) queued session \(session.id)")
+    }
+    
+    func archiveSession(_ session: Session) async throws {
+        guard session.canArchive else {
+            throw SessionError.invalidStateTransition
+        }
+        
+        // Update session state on main thread
+        var updatedSession = session
+        updatedSession.updateState(.archived)
+        await updateSession(updatedSession)
+        
+        print("DEBUG: SessionService(\(instanceId)) archived session \(session.id)")
+    }
+    
+    func unarchiveSession(_ session: Session) async throws {
+        guard session.state == .archived else {
+            throw SessionError.invalidStateTransition
+        }
+        
+        // Update session state on main thread
+        var updatedSession = session
+        updatedSession.updateState(.idle)
+        await updateSession(updatedSession)
+        
+        print("DEBUG: SessionService(\(instanceId)) unarchived session \(session.id)")
+    }
+    
+    func updateSessionPriority(_ session: Session, priority: SessionPriority) async throws {
+        // Update session priority on main thread
+        var updatedSession = session
+        updatedSession.updatePriority(priority)
+        await updateSession(updatedSession)
+        
+        print("DEBUG: SessionService(\(instanceId)) updated session \(session.id) priority to \(priority.displayName)")
+    }
+    
     // MARK: - Message Monitoring
     // Note: Message monitoring is now handled synchronously in sendMessage
     // since we're using Claude Code CLI in print mode
     
     func sendMessageStream(_ content: String, to session: Session) -> AsyncStream<Message> {
-        guard session.state == .active else {
+        guard session.canSendMessage else {
             return AsyncStream { continuation in
-                print("DEBUG: Cannot send message - session not active. State: \(session.state)")
+                print("DEBUG: Cannot send message - session cannot receive messages. State: \(session.state)")
                 continuation.finish()
             }
         }
@@ -267,9 +265,10 @@ class SessionService: ObservableObject {
                 // Create user message first
                 let userMessage = Message(sessionId: session.id, content: content, role: .user)
                 
-                // Add user message to session on main thread
+                // Add user message to session and update state to processing
                 var updatedSession = session
                 updatedSession.addMessage(userMessage)
+                updatedSession.updateState(.processing)
                 await updateSession(updatedSession)
                 
                 // Yield the user message immediately
@@ -321,6 +320,10 @@ class SessionService: ObservableObject {
                     continuation.yield(message)
                 }
                 
+                // Update session to ready for review state when streaming completes
+                updatedSession.updateState(.readyForReview)
+                await updateSession(updatedSession)
+                
                 print("DEBUG: Streaming completed for session \(session.id)")
                 continuation.finish()
             }
@@ -335,7 +338,7 @@ class SessionService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func updateSession(_ session: Session) async {
+    func updateSession(_ session: Session) async {
         await MainActor.run {
             if let index = sessions.firstIndex(where: { $0.id == session.id }) {
                 sessions[index] = session
@@ -378,10 +381,8 @@ class SessionService: ObservableObject {
     // MARK: - Cleanup
     
     func cleanup() async {
-        let activeSessions = await MainActor.run { sessions.filter({ $0.isActive }) }
-        for session in activeSessions {
-            try? await stopSession(session)
-        }
+        // Sessions are conceptually always active, no need to stop them
+        // Just clean up any resources
     }
 }
 

@@ -82,15 +82,7 @@ class CodeCaptainStore: ObservableObject {
         error = nil
         
         do {
-            // Stop all sessions for this project
-            let projectSessions = sessions.filter { $0.projectId == project.id }
-            for session in projectSessions {
-                if session.isActive {
-                    try await sessionService.stopSession(session)
-                }
-            }
-            
-            // Remove the project
+            // Sessions are conceptually always active, just remove the project
             try await projectService.removeProject(project)
             
             // Clear selection if this was the selected project
@@ -122,11 +114,11 @@ class CodeCaptainStore: ObservableObject {
         isLoading = false
     }
     
-    func startSession(_ session: Session) async {
+    func initializeSession(_ session: Session) async {
         error = nil
         
         do {
-            try await sessionService.startSession(session)
+            try await sessionService.initializeSession(session)
             selectedSession = session
             
         } catch {
@@ -134,38 +126,8 @@ class CodeCaptainStore: ObservableObject {
         }
     }
     
-    func stopSession(_ session: Session) async {
-        error = nil
-        
-        do {
-            try await sessionService.stopSession(session)
-            
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
     
-    func pauseSession(_ session: Session) async {
-        error = nil
-        
-        do {
-            try await sessionService.pauseSession(session)
-            
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
     
-    func resumeSession(_ session: Session) async {
-        error = nil
-        
-        do {
-            try await sessionService.resumeSession(session)
-            
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
     
     func deleteSession(_ session: Session) async {
         error = nil
@@ -199,6 +161,90 @@ class CodeCaptainStore: ObservableObject {
         return sessionService.sendMessageStream(content, to: session)
     }
     
+    func queueSession(_ session: Session) async {
+        error = nil
+        
+        do {
+            try await sessionService.queueSession(session)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    
+    func archiveSession(_ session: Session) async {
+        error = nil
+        
+        do {
+            try await sessionService.archiveSession(session)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    
+    func unarchiveSession(_ session: Session) async {
+        error = nil
+        
+        do {
+            try await sessionService.unarchiveSession(session)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    
+    func updateSessionPriority(_ session: Session, priority: SessionPriority) async {
+        error = nil
+        
+        do {
+            try await sessionService.updateSessionPriority(session, priority: priority)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+    
+    // MARK: - Bulk Operations
+    
+    func processNextQueuedSession() async {
+        error = nil
+        
+        // Get highest priority queued session
+        let queuedSessions = sessions.filter { $0.state == .queued }
+            .sorted { $0.priority.rawValue > $1.priority.rawValue }
+        
+        if let nextSession = queuedSessions.first {
+            do {
+                try await sessionService.initializeSession(nextSession)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+    
+    func markAllReadySessionsAsIdle() async {
+        error = nil
+        
+        let readySessions = sessions.filter { $0.state == .readyForReview }
+        for session in readySessions {
+            var updatedSession = session
+            updatedSession.updateState(.idle)
+            // Update the session in the service
+            await sessionService.updateSession(updatedSession)
+        }
+    }
+    
+    func archiveAllFailedSessions() async {
+        error = nil
+        
+        let failedSessions = sessions.filter { $0.state == .failed || $0.state == .error }
+        for session in failedSessions {
+            do {
+                try await sessionService.archiveSession(session)
+            } catch {
+                self.error = error.localizedDescription
+                break
+            }
+        }
+    }
+    
     // MARK: - Helper Methods
     
     func isProviderAvailable(_ providerType: ProviderType) -> Bool {
@@ -218,17 +264,17 @@ class CodeCaptainStore: ObservableObject {
         return sessions.filter { $0.projectId == project.id }
     }
     
-    func getActiveSessionsForProject(_ project: Project?) -> [Session] {
+    func getProcessingSessionsForProject(_ project: Project?) -> [Session] {
         guard let project = project else { return [] }
-        return sessions.filter { $0.projectId == project.id && $0.isActive }
+        return sessions.filter { $0.projectId == project.id && $0.state == .processing }
     }
     
     func getSession(by id: UUID) -> Session? {
         return sessions.first { $0.id == id }
     }
     
-    func getTotalActiveSessions() -> Int {
-        return sessions.filter { $0.isActive }.count
+    func getTotalProcessingSessions() -> Int {
+        return sessions.filter { $0.state == .processing }.count
     }
     
     func selectProject(_ project: Project) {

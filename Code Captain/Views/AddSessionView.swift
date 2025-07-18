@@ -38,7 +38,7 @@ struct AddSessionView: View {
             
             // Content
             Form {
-                Section(header: Text("Session Details")) {
+                Section("Session Details") {
                     TextField("Session Name", text: $sessionName)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                     
@@ -57,25 +57,26 @@ struct AddSessionView: View {
                     .pickerStyle(MenuPickerStyle())
                 }
                 
-                Section(header: Text("Options")) {
+                Section("Options") {
                     Toggle("Start session immediately", isOn: $startImmediately)
                 }
                 
-                if let project = selectedProject {
-                    Section(header: Text("Project Info")) {
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("Path:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                Group {
+                    if let project = selectedProject {
+                        Section("Project Info") {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text("Path:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text(project.path.path)
+                                        .font(.body)
+                                        .textSelection(.enabled)
+                                }
                                 
-                                Text(project.path.path)
-                                    .font(.body)
-                                    .textSelection(.enabled)
+                                Spacer()
                             }
-                            
-                            Spacer()
-                        }
                         
                         HStack {
                             Text("Provider:")
@@ -112,15 +113,16 @@ struct AddSessionView: View {
                         }
                         
                         HStack {
-                            Text("Active Sessions:")
+                            Text("Processing Sessions:")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             
                             Spacer()
                             
-                            Text("\(store.getActiveSessionsForProject(project).count)")
+                            Text("\(store.getProcessingSessionsForProject(project).count)")
                                 .font(.body)
                         }
+                    }
                     }
                 }
             }
@@ -173,9 +175,9 @@ struct AddSessionView: View {
             await store.createSession(for: project, name: sessionName)
             
             if store.error == nil {
-                // Start session immediately if requested
+                // Initialize session immediately if requested
                 if startImmediately, let newSession = store.selectedSession {
-                    await store.startSession(newSession)
+                    await store.initializeSession(newSession)
                 }
                 
                 dismiss()
