@@ -14,6 +14,6 @@ struct CodeCaptainApp: App {
             MainView()
         }
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(UnifiedCompactWindowToolbarStyle(showsTitle: true))
     }
 }

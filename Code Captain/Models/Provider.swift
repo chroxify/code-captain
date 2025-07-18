@@ -1,6 +1,6 @@
 import Foundation
 
-protocol CodeAssistantProvider: AnyObject {
+protocol CodeAssistantProvider: AnyObject, VersionedProvider, VersionProvider {
     var name: String { get }
     var version: String { get }
     var supportedFeatures: Set<ProviderFeature> { get }
@@ -64,22 +64,25 @@ struct ProviderResponse: Codable {
     let content: String
     let sessionId: String?
     let metadata: [String: Any]?
+    let messages: [SDKMessage]?
     
-    init(content: String, sessionId: String? = nil, metadata: [String: Any]? = nil) {
+    init(content: String, sessionId: String? = nil, metadata: [String: Any]? = nil, messages: [SDKMessage]? = nil) {
         self.content = content
         self.sessionId = sessionId
         self.metadata = metadata
+        self.messages = messages
     }
     
     // Custom coding because [String: Any] doesn't conform to Codable
     enum CodingKeys: String, CodingKey {
-        case content, sessionId, metadata
+        case content, sessionId, metadata, messages
     }
     
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(content, forKey: .content)
         try container.encodeIfPresent(sessionId, forKey: .sessionId)
+        try container.encodeIfPresent(messages, forKey: .messages)
         // Skip metadata for now as it's complex to encode [String: Any]
     }
     
@@ -87,6 +90,7 @@ struct ProviderResponse: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         content = try container.decode(String.self, forKey: .content)
         sessionId = try container.decodeIfPresent(String.self, forKey: .sessionId)
+        messages = try container.decodeIfPresent([SDKMessage].self, forKey: .messages)
         metadata = nil // Skip metadata for now
     }
 }

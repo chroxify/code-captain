@@ -9,7 +9,7 @@ struct Session: Identifiable, Codable, Hashable {
     var lastActiveAt: Date
     var state: SessionState
     var messages: [Message]
-    var claudeSessionId: String?
+    var providerSessionId: String?
     
     init(projectId: UUID, name: String, branchName: String? = nil) {
         self.id = UUID()
@@ -20,7 +20,7 @@ struct Session: Identifiable, Codable, Hashable {
         self.lastActiveAt = Date()
         self.state = .idle
         self.messages = []
-        self.claudeSessionId = nil
+        self.providerSessionId = nil
     }
     
     var displayName: String {
@@ -49,13 +49,13 @@ struct Session: Identifiable, Codable, Hashable {
         self.lastActiveAt = Date()
     }
     
-    mutating func setClaudeSessionId(_ sessionId: String?) {
-        self.claudeSessionId = sessionId
+    mutating func setProviderSessionId(_ sessionId: String?) {
+        self.providerSessionId = sessionId
         self.lastActiveAt = Date()
     }
     
-    var hasClaudeSession: Bool {
-        return claudeSessionId != nil
+    var hasProviderSession: Bool {
+        return providerSessionId != nil
     }
 }
 

@@ -58,20 +58,20 @@ class SessionService: ObservableObject {
         }
         
         do {
-            // Create or resume Claude Code session
+            // Create or resume provider session
             let sessionId: String
-            if let existingSessionId = session.claudeSessionId {
+            if let existingSessionId = session.providerSessionId {
                 sessionId = existingSessionId
             } else {
                 sessionId = try await providerService.createSession(using: project.providerType, in: project.gitWorktreePath)
-                updatedSession.setClaudeSessionId(sessionId)
+                updatedSession.setProviderSessionId(sessionId)
             }
             
             // Update session state
             updatedSession.updateState(.active)
             await updateSession(updatedSession)
             
-            print("DEBUG: SessionService(\(instanceId)) started session \(session.id) with Claude session ID: \(sessionId)")
+            print("DEBUG: SessionService(\(instanceId)) started session \(session.id) with provider session ID: \(sessionId)")
             
         } catch {
             updatedSession.updateState(.error)
@@ -156,29 +156,42 @@ class SessionService: ObservableObject {
                 content,
                 using: project.providerType,
                 workingDirectory: project.gitWorktreePath,
-                sessionId: session.claudeSessionId
+                sessionId: session.providerSessionId
             )
             
-            // Create assistant message from response
-            let assistantMessage = Message(
-                sessionId: session.id,
-                content: response.content,
-                role: .assistant,
-                metadata: response.metadata.map { metadata in
-                    MessageMetadata(
-                        filesChanged: metadata["filesChanged"] as? [String],
-                        gitOperations: metadata["gitOperations"] as? [String],
-                        toolsUsed: metadata["toolsUsed"] as? [String]
-                    )
+            // Process response messages
+            if let sdkMessages = response.messages, !sdkMessages.isEmpty {
+                // Create rich messages from SDK messages
+                for sdkMessage in sdkMessages {
+                    let message = Message(from: sdkMessage, sessionId: session.id)
+                    updatedSession.addMessage(message)
                 }
-            )
+            } else {
+                // Fallback to legacy single message
+                let assistantMessage = Message(
+                    sessionId: session.id,
+                    content: response.content,
+                    role: .assistant,
+                    metadata: response.metadata.map { metadata in
+                        MessageMetadata(
+                            filesChanged: metadata["filesChanged"] as? [String],
+                            gitOperations: metadata["gitOperations"] as? [String],
+                            toolsUsed: metadata["toolsUsed"] as? [String]
+                        )
+                    }
+                )
+                updatedSession.addMessage(assistantMessage)
+            }
             
-            // Add assistant message to session
-            updatedSession.addMessage(assistantMessage)
-            
-            // Update session ID if we got a new one
-            if let newSessionId = response.sessionId {
-                updatedSession.setClaudeSessionId(newSessionId)
+            // Always update session ID from response (this is critical for session continuity)
+            if let newSessionId = response.sessionId, !newSessionId.isEmpty {
+                let currentSessionId = updatedSession.providerSessionId
+                
+                // Always update the session ID to ensure proper session evolution
+                if currentSessionId != newSessionId {
+                    print("DEBUG: Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)")
+                    updatedSession.setProviderSessionId(newSessionId)
+                }
             }
             
             await updateSession(updatedSession)
@@ -192,13 +205,13 @@ class SessionService: ObservableObject {
             if error.localizedDescription.contains("No conversation found") {
                 
                 print("DEBUG: Session ID invalid, clearing and creating new session")
-                updatedSession.setClaudeSessionId(nil)
+                updatedSession.setProviderSessionId(nil)
                 await updateSession(updatedSession)
                 
                 // Try to create a new session
                 do {
                     let newSessionId = try await providerService.createSession(using: project.providerType, in: project.gitWorktreePath)
-                    updatedSession.setClaudeSessionId(newSessionId)
+                    updatedSession.setProviderSessionId(newSessionId)
                     await updateSession(updatedSession)
                     
                     // Retry sending the message with new session
@@ -238,6 +251,87 @@ class SessionService: ObservableObject {
     // MARK: - Message Monitoring
     // Note: Message monitoring is now handled synchronously in sendMessage
     // since we're using Claude Code CLI in print mode
+    
+    func sendMessageStream(_ content: String, to session: Session) -> AsyncStream<Message> {
+        guard session.state == .active else {
+            return AsyncStream { continuation in
+                print("DEBUG: Cannot send message - session not active. State: \(session.state)")
+                continuation.finish()
+            }
+        }
+        
+        print("DEBUG: SessionService(\(instanceId)) sending streaming message to session \(session.id): \(content)")
+        
+        return AsyncStream { continuation in
+            Task {
+                // Create user message first
+                let userMessage = Message(sessionId: session.id, content: content, role: .user)
+                
+                // Add user message to session on main thread
+                var updatedSession = session
+                updatedSession.addMessage(userMessage)
+                await updateSession(updatedSession)
+                
+                // Yield the user message immediately
+                continuation.yield(userMessage)
+                
+                // Get project for working directory
+                guard let project = await getProject(for: session) else {
+                    print("DEBUG: Project not found for session")
+                    continuation.finish()
+                    return
+                }
+                
+                // Create stream for Claude Code responses
+                if let providerSessionId = session.providerSessionId {
+                    print("DEBUG: SessionService sending message with existing provider session ID: \(providerSessionId)")
+                } else {
+                    print("DEBUG: SessionService sending message without provider session ID (will start new session)")
+                }
+                
+                let messageStream = providerService.sendMessageStream(
+                    content,
+                    using: project.providerType,
+                    workingDirectory: project.gitWorktreePath,
+                    sessionId: session.providerSessionId
+                )
+                
+                // Process each streaming message
+                for await sdkMessage in messageStream {
+                    print("DEBUG: Received streaming SDK message: \(sdkMessage.id)")
+                    
+                    let message = Message(from: sdkMessage, sessionId: session.id)
+                    updatedSession.addMessage(message)
+                    
+                    // Always update session ID from response (this is critical for session continuity)
+                    let newSessionId = sdkMessage.sessionId
+                    if !newSessionId.isEmpty {
+                        let currentSessionId = updatedSession.providerSessionId
+                        
+                        // Always update the session ID to ensure proper session evolution
+                        if currentSessionId != newSessionId {
+                            print("DEBUG: Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)")
+                            updatedSession.setProviderSessionId(newSessionId)
+                        }
+                    }
+                    
+                    await updateSession(updatedSession)
+                    
+                    // Yield the message immediately
+                    continuation.yield(message)
+                }
+                
+                print("DEBUG: Streaming completed for session \(session.id)")
+                continuation.finish()
+            }
+        }
+    }
+    
+    // MARK: - Provider Methods
+    
+    func getProviderVersion(for type: ProviderType) async -> String? {
+        return await providerService.getProviderVersion(for: type)
+    }
     
     // MARK: - Helper Methods
     

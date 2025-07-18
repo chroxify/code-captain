@@ -5,13 +5,71 @@ struct MainView: View {
     @State private var showingAddProject = false
     @State private var showingAddSession = false
     @State private var showingSettings = false
+    @State private var isInspectorPresented = false
     
     var body: some View {
         NavigationSplitView {
             SidebarView(store: store)
-                .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 400)
+                .navigationSplitViewColumnWidth(min: 250, ideal: 300)
         } detail: {
-            DetailView(store: store)
+            DetailView(store: store, isInspectorPresented: $isInspectorPresented)
+        }
+        .inspector(isPresented: $isInspectorPresented) {
+            // Inspector content - only show if we have a selected session
+            if let session = store.selectedSession {
+                VStack(spacing: 0) {
+                    // Toolbar spacer - creates visual separation
+                    Color.clear
+                        .frame(height: 0) // Standard macOS toolbar height
+                    
+                    // Separator below toolbar
+                    Divider()
+                    
+                    // Main content area
+                    VSplitView {
+                        // Top section: TODOs (50%)
+                        TodoSectionView(session: session)
+                            .frame(minHeight: 150)
+                        
+                        // Bottom section: Terminal (50%)
+                        SwiftTerminalSectionView(session: session, store: store)
+                            .frame(minHeight: 150)
+                    }
+                }
+                .inspectorColumnWidth(min: 250, ideal: 300)
+                .toolbar {
+                    Button("", systemImage: "sidebar.right") {
+                        isInspectorPresented.toggle()
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    // Toolbar spacer - creates visual separation
+                    Color.clear
+                        .frame(height: 0) // Standard macOS toolbar height
+                    
+                    // Separator below toolbar
+                    Divider()
+                    
+                    // Main content area
+                    VStack {
+                        Text("No Session Selected")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("Select a session to view tools and terminal")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .inspectorColumnWidth(min: 250, ideal: 300, max: 450)
+                .toolbar {
+                    Button("", systemImage: "sidebar.right") {
+                        isInspectorPresented.toggle()
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showingAddProject) {
             AddProjectView(store: store)
@@ -59,11 +117,10 @@ struct SidebarView: View {
     @ObservedObject var store: CodeCaptainStore
     
     var body: some View {
-        List(selection: $store.selectedProject) {
+        List(selection: $store.selectedSession) {
             Section("Projects") {
                 ForEach(store.projects) { project in
                     ProjectRowView(project: project, store: store)
-                        .tag(project)
                 }
             }
         }
@@ -227,6 +284,7 @@ struct SessionRowView: View {
 
 struct DetailView: View {
     @ObservedObject var store: CodeCaptainStore
+    @Binding var isInspectorPresented: Bool
     
     var body: some View {
         Group {

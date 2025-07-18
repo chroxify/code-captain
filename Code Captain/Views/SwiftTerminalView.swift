@@ -44,7 +44,7 @@ struct SwiftTerminalSectionView: View {
                 Spacer()
                 
                 if let session = session {
-                    Text("Session: \(session.claudeSessionId?.prefix(8) ?? "None")")
+                    Text("Session: \(session.providerSessionId?.prefix(8) ?? "None")")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

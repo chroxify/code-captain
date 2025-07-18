@@ -37,6 +37,17 @@ class ProviderService: ObservableObject {
         }
     }
     
+    func getProviderVersion(for type: ProviderType) async -> String? {
+        guard let provider = providers[type] else { return nil }
+        
+        // For Claude Code provider, get the actual version
+        if let claudeProvider = provider as? ClaudeCodeProvider {
+            return await claudeProvider.checkClaudeCodeVersion()
+        }
+        
+        return provider.version
+    }
+    
     // MARK: - Session Management
     
     /// Create a new session using the specified provider
@@ -86,6 +97,32 @@ class ProviderService: ObservableObject {
             logger.error("Failed to send message with provider \(providerType.displayName): \(error)", category: .provider)
             throw error
         }
+    }
+    
+    /// Send a message using the specified provider with streaming support
+    func sendMessageStream(
+        _ message: String,
+        using providerType: ProviderType,
+        workingDirectory: URL,
+        sessionId: String? = nil
+    ) -> AsyncStream<SDKMessage> {
+        guard let provider = providers[providerType] as? ClaudeCodeProvider else {
+            return AsyncStream { continuation in
+                logger.error("Provider not found or doesn't support streaming: \(providerType.displayName)", category: .provider)
+                continuation.finish()
+            }
+        }
+        
+        guard provider.isAvailable else {
+            return AsyncStream { continuation in
+                logger.error("Provider not available: \(providerType.displayName)", category: .provider)
+                continuation.finish()
+            }
+        }
+        
+        logger.info("Sending streaming message with provider: \(providerType.displayName)", category: .provider)
+        
+        return provider.sendMessageStream(message, workingDirectory: workingDirectory, sessionId: sessionId)
     }
     
     /// List available sessions from the specified provider

@@ -7,6 +7,7 @@ struct AddSessionView: View {
     @State private var sessionName = ""
     @State private var selectedProject: Project?
     @State private var startImmediately = true
+    @State private var providerVersion: String?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -83,8 +84,20 @@ struct AddSessionView: View {
                             
                             Spacer()
                             
-                            Label(project.providerType.displayName, systemImage: project.providerType.systemImageName)
-                                .font(.body)
+                            VStack(alignment: .trailing) {
+                                Label(project.providerType.displayName, systemImage: project.providerType.systemImageName)
+                                    .font(.body)
+                                
+                                if let version = providerVersion {
+                                    Text("v\(version)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Checking version...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         
                         HStack {
@@ -122,6 +135,23 @@ struct AddSessionView: View {
             // Auto-generate session name
             if sessionName.isEmpty {
                 sessionName = generateSessionName()
+            }
+            
+            // Load provider version for selected project
+            if let project = selectedProject {
+                Task {
+                    providerVersion = await store.getProviderVersion(for: project.providerType)
+                }
+            }
+        }
+        .onChange(of: selectedProject) { newProject in
+            // Load provider version when project changes
+            if let project = newProject {
+                Task {
+                    providerVersion = await store.getProviderVersion(for: project.providerType)
+                }
+            } else {
+                providerVersion = nil
             }
         }
     }

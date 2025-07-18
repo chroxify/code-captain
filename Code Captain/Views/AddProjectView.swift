@@ -10,6 +10,7 @@ struct AddProjectView: View {
     @State private var selectedPath: URL?
     @State private var selectedProvider: ProviderType = .claudeCode
     @State private var isSelectingPath = false
+    @State private var providerVersion: String?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -117,9 +118,17 @@ struct AddProjectView: View {
                             Text(selectedProvider.displayName)
                                 .font(.headline)
                             
-                            Text(providerStatusText)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            HStack {
+                                Text(providerStatusText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                if let version = providerVersion, store.isProviderAvailable(selectedProvider) {
+                                    Text("• v\(version)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                         
                         Spacer()
@@ -135,6 +144,18 @@ struct AddProjectView: View {
             .padding()
         }
         .frame(minWidth: 600, minHeight: 500)
+        .onAppear {
+            // Load provider version on appear
+            Task {
+                providerVersion = await store.getProviderVersion(for: selectedProvider)
+            }
+        }
+        .onChange(of: selectedProvider) { newProvider in
+            // Load provider version when provider changes
+            Task {
+                providerVersion = await store.getProviderVersion(for: newProvider)
+            }
+        }
     }
     
     private var isFormValid: Bool {

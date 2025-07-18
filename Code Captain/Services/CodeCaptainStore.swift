@@ -194,11 +194,20 @@ class CodeCaptainStore: ObservableObject {
         }
     }
     
+    func sendMessageStream(_ content: String, to session: Session) -> AsyncStream<Message> {
+        error = nil
+        return sessionService.sendMessageStream(content, to: session)
+    }
+    
     // MARK: - Helper Methods
     
     func isProviderAvailable(_ providerType: ProviderType) -> Bool {
         // For now, Claude Code is always available if installed
         return true
+    }
+    
+    func getProviderVersion(for type: ProviderType) async -> String? {
+        return await sessionService.getProviderVersion(for: type)
     }
     
     // MARK: - Terminal Management
