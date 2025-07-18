@@ -8,10 +8,12 @@
 import SwiftUI
 
 @main
-struct Code_CaptainApp: App {
+struct CodeCaptainApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainView()
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
     }
 }
