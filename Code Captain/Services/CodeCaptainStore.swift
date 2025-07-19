@@ -11,6 +11,7 @@ class CodeCaptainStore: ObservableObject {
     @Published var selectedSessionId: UUID?
     @Published var isLoading = false
     @Published var error: String?
+    @Published var scrollToMessage: UUID?
     
     private let projectService: ProjectService
     private let sessionService: SessionService

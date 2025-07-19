@@ -3,6 +3,15 @@ import SwiftUI
 struct SessionRowView: View {
     let session: Session
     @ObservedObject var store: CodeCaptainStore
+    let searchText: String?
+    let matchingMessage: Message?
+    
+    init(session: Session, store: CodeCaptainStore, searchText: String? = nil, matchingMessage: Message? = nil) {
+        self.session = session
+        self.store = store
+        self.searchText = searchText
+        self.matchingMessage = matchingMessage
+    }
     
     var body: some View {
         HStack {
@@ -84,6 +93,15 @@ struct SessionRowView: View {
             Button("Delete Session", role: .destructive) {
                 Task {
                     await store.deleteSession(session)
+                }
+            }
+        }
+        .onChange(of: store.selectedSessionId) { selectedId in
+            // If this session was just selected and we have a matching message, scroll to it
+            if selectedId == session.id, let matchingMessage = matchingMessage {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    print("🔍 Setting scroll to message: \(matchingMessage.content.prefix(50))...")
+                    store.scrollToMessage = matchingMessage.id
                 }
             }
         }
