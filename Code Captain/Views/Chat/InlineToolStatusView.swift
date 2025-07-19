@@ -1,11 +1,11 @@
-import SwiftUI
 import Shimmer
+import SwiftUI
 
 struct InlineToolStatusView: View {
     let toolStatus: ToolStatus
     @State private var isExpanded = false
     @State private var isHovered = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Main status row
@@ -14,44 +14,59 @@ struct InlineToolStatusView: View {
                 Image(systemName: toolStatus.customIconName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(toolIconColor)
-                
-                // Status label
-                statusLabel
-                
-                Spacer()
-                
-                // Chevron for completed state (on hover)
-                if toolStatus.isCompleted && (isHovered || isExpanded) {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+
+                // Status label with chevron right next to it
+                HStack(spacing: 6) {
+                    statusLabel
+
+                    // Chevron for completed state (on hover or expanded)
+                    if toolStatus.isCompleted && (isHovered || isExpanded) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.secondary).opacity(0.75)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .animation(
+                                .spring(
+                                    response: 0.25,
+                                    dampingFraction: 0.9,
+                                    blendDuration: 0
+                                ),
+                                value: isExpanded
+                            )
+                    }
                 }
+
+                Spacer()
             }
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     isHovered = hovering
                 }
             }
             .onTapGesture {
                 if toolStatus.isCompleted && toolStatus.fullContent != nil {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.9))
+                    {
                         isExpanded.toggle()
                     }
                 }
             }
-            
+            .contentShape(Rectangle())  // Full-width hit area
+
             // Preview content (processing state) or expanded content (completed state)
             if shouldShowContent {
                 contentView
-                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
+                    .frame(maxHeight: shouldShowContent ? .infinity : 0, alignment: .top)
+                    .opacity(shouldShowContent ? 1 : 0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.9), value: shouldShowContent)
+                    .clipped() // Prevent content overflow during animation
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     // MARK: - Computed Properties
-    
+
     private var statusLabel: some View {
         Group {
             switch toolStatus.state {
@@ -60,14 +75,14 @@ struct InlineToolStatusView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
-                    .shimmering() // Apply shimmer animation
-                    
+                    .shimmering()  // Apply shimmer animation
+
             case .completed:
                 Text(toolStatus.completedLabel)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.secondary)
-                    
+
             case .error(let message):
                 Text(toolStatus.errorLabel)
                     .font(.subheadline)
@@ -76,7 +91,7 @@ struct InlineToolStatusView: View {
             }
         }
     }
-    
+
     private var toolIconColor: Color {
         switch toolStatus.state {
         case .processing:
@@ -87,17 +102,18 @@ struct InlineToolStatusView: View {
             return .red
         }
     }
-    
+
     private var shouldShowContent: Bool {
         if toolStatus.isProcessing && toolStatus.preview != nil {
             return true
         }
-        if toolStatus.isCompleted && isExpanded && toolStatus.fullContent != nil {
+        if toolStatus.isCompleted && isExpanded && toolStatus.fullContent != nil
+        {
             return true
         }
         return false
     }
-    
+
     private var contentView: some View {
         Group {
             if toolStatus.isProcessing {
@@ -113,16 +129,16 @@ struct InlineToolStatusView: View {
             }
         }
     }
-    
+
     private func previewContent(_ preview: String) -> some View {
         Text(preview)
             .font(.caption)
             .foregroundColor(.secondary)
             .lineLimit(3)
-            .padding(.leading, 22) // Align with text after icon
+            .padding(.leading, 22)  // Align with text after icon
             .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     private func expandedContent(_ content: String) -> some View {
         ScrollView {
             Text(content)
@@ -130,13 +146,9 @@ struct InlineToolStatusView: View {
                 .foregroundColor(.secondary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-                .cornerRadius(8)
         }
         .frame(maxHeight: 200)
-        .padding(.leading, 22) // Align with text after icon
+        .padding(.leading, 22)  // Align with text after icon
     }
 }
 
@@ -168,13 +180,14 @@ extension InlineToolStatusView {
             id: "thinking-1",
             toolType: .task,
             state: .processing,
-            preview: "I need to analyze the user's request and determine the best approach. This involves reading the current file structure and understanding the codebase...",
+            preview:
+                "I need to analyze the user's request and determine the best approach. This involves reading the current file structure and understanding the codebase...",
             fullContent: nil,
             startTime: Date()
         )
         return InlineToolStatusView(toolStatus: toolStatus)
     }
-    
+
     static var mockProcessingBash: InlineToolStatusView {
         let toolStatus = ToolStatus(
             id: "bash-1",
@@ -186,14 +199,15 @@ extension InlineToolStatusView {
         )
         return InlineToolStatusView(toolStatus: toolStatus)
     }
-    
+
     static var mockCompletedRead: InlineToolStatusView {
         let toolStatus = ToolStatus(
             id: "read-1",
             toolType: .read,
             state: .completed(duration: 0.5),
             preview: "ChatView.swift",
-            fullContent: "import SwiftUI\n\nstruct ChatView: View {\n    let sessionId: UUID\n    @ObservedObject var store: CodeCaptainStore\n    // ... rest of file content",
+            fullContent:
+                "import SwiftUI\n\nstruct ChatView: View {\n    let sessionId: UUID\n    @ObservedObject var store: CodeCaptainStore\n    // ... rest of file content",
             startTime: Date().addingTimeInterval(-1),
             endTime: Date().addingTimeInterval(-0.5)
         )
