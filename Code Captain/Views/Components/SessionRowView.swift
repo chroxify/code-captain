@@ -14,7 +14,7 @@ struct SessionRowView: View {
                         .font(.subheadline)
                     
                     // Priority indicator
-                    if session.priority != .medium {
+                    if session.priority != .none {
                         Image(systemName: session.priority.systemImageName)
                             .foregroundColor(priorityColor(session.priority))
                             .font(.caption)
@@ -69,10 +69,12 @@ struct SessionRowView: View {
             
             Menu("Set Priority") {
                 ForEach(SessionPriority.allCases, id: \.self) { priority in
-                    Button(priority.displayName) {
+                    Button(action: {
                         Task {
                             await store.updateSessionPriority(session, priority: priority)
                         }
+                    }) {
+                        Label(priority.displayName, systemImage: session.priority == priority ? "checkmark" : "")
                     }
                 }
             }
@@ -93,6 +95,7 @@ struct SessionRowView: View {
     
     private func priorityColor(_ priority: SessionPriority) -> Color {
         switch priority {
+        case .none: return .secondary
         case .low: return .blue
         case .medium: return .yellow
         case .high: return .orange

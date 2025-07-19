@@ -71,6 +71,7 @@ enum TodoPriority: String, CaseIterable, Codable {
 }
 
 enum SessionPriority: String, CaseIterable, Codable {
+    case none = "none"
     case low = "low"
     case medium = "medium"
     case high = "high"
@@ -78,6 +79,7 @@ enum SessionPriority: String, CaseIterable, Codable {
     
     var displayName: String {
         switch self {
+        case .none: return "None"
         case .low: return "Low"
         case .medium: return "Medium"
         case .high: return "High"
@@ -87,6 +89,7 @@ enum SessionPriority: String, CaseIterable, Codable {
     
     var systemImageName: String {
         switch self {
+        case .none: return ""
         case .low: return "arrow.down.circle"
         case .medium: return "minus.circle"
         case .high: return "arrow.up.circle"
@@ -96,10 +99,31 @@ enum SessionPriority: String, CaseIterable, Codable {
     
     var color: String {
         switch self {
+        case .none: return "secondary"
         case .low: return "blue"
         case .medium: return "yellow"
         case .high: return "orange"
         case .urgent: return "red"
+        }
+    }
+    
+    var rawValue: String {
+        switch self {
+        case .none: return "none"
+        case .low: return "low"
+        case .medium: return "medium"
+        case .high: return "high"
+        case .urgent: return "urgent"
+        }
+    }
+    
+    var priorityValue: Int {
+        switch self {
+        case .none: return 0
+        case .low: return 1
+        case .medium: return 2
+        case .high: return 3
+        case .urgent: return 4
         }
     }
 }
@@ -129,7 +153,7 @@ struct Session: Identifiable, Codable, Hashable {
     // Todo management
     var todos: [SessionTodo]
     
-    init(projectId: UUID, name: String, branchName: String? = nil, priority: SessionPriority = .medium, description: String = "", tags: [String] = []) {
+    init(projectId: UUID, name: String, branchName: String? = nil, priority: SessionPriority = .none, description: String = "", tags: [String] = []) {
         self.id = UUID()
         self.projectId = projectId
         self.name = name

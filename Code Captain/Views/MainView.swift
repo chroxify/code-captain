@@ -38,12 +38,50 @@ struct MainView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button(action: {
-                    showingSettings = true
-                }) {
-                    Image(systemName: "gear")
+                // Session status indicator
+                if let session = store.selectedSession {
+                    HStack(spacing: 8) {
+                        LiveActivityIndicator(state: session.state).scaleEffect(1.1)
+                        
+                        VStack(alignment: .leading) {
+                            // Session name (top row)
+                            Text(session.displayName)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                            
+                            // Project, status, and todos (bottom row)
+                            HStack(spacing: 4) {
+                                // Project name
+                                if let project = store.projects.first(where: { $0.id == session.projectId }) {
+                                    Text(project.displayName)
+                                        .font(.system(size: 11, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text("•")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                // Status
+                                Text(session.state.displayName)
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundColor(colorForState(session.state))
+                                
+                                // Todo count if todos exist
+                                if !session.todos.isEmpty {
+                                    Text("• \(session.completedTodosCount)/\(session.totalTodosCount)")
+                                        .font(.system(size: 11, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .animation(.none, value: session.state)
+                    .animation(.none, value: session.todos.count)
+                    .animation(.none, value: session.completedTodosCount)
                 }
-                .help("Settings")
+                
+                Spacer()
             }
             
             ToolbarItemGroup(placement: .primaryAction) {
@@ -62,6 +100,19 @@ struct MainView: View {
                 }
                 .help("New Project")
             }
+        }
+    }
+    
+    private func colorForState(_ state: SessionState) -> Color {
+        switch state {
+        case .idle: return .secondary
+        case .processing: return .orange
+        case .waitingForInput: return .yellow
+        case .readyForReview: return .green
+        case .error: return .red
+        case .queued: return .blue
+        case .archived: return .brown
+        case .failed: return .red
         }
     }
 }

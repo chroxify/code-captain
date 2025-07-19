@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SessionsView: View {
     @ObservedObject var store: CodeCaptainStore
+    @State private var isArchivedExpanded = false
+    @State private var isArchivedHovered = false
     
     var body: some View {
         List(selection: $store.selectedSessionId) {
@@ -13,75 +15,47 @@ struct SessionsView: View {
             let failedSessions = store.sessions.filter { $0.state == .failed || $0.state == .error }
             let archivedSessions = store.sessions.filter { $0.state == .archived }
             
-            if !processingSessions.isEmpty {
-                Section {
-                    ForEach(processingSessions.sorted { $0.priority.rawValue > $1.priority.rawValue }) { session in
-                        SessionRowView(session: session, store: store)
-                            .tag(session.id)
-                    }
-                } header: {
-                    HStack {
-                        Text("Processing")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(processingSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
-                }
-            }
-            
             if !waitingForInputSessions.isEmpty {
                 Section {
-                    ForEach(waitingForInputSessions.sorted { $0.priority.rawValue > $1.priority.rawValue }) { session in
+                    ForEach(waitingForInputSessions.sorted { $0.priority.priorityValue > $1.priority.priorityValue }) { session in
                         SessionRowView(session: session, store: store)
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Waiting for Input")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(waitingForInputSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
+                    SectionHeaderView(title: "Waiting for Input", count: waitingForInputSessions.count)
                 }
             }
             
             if !readyForReviewSessions.isEmpty {
                 Section {
-                    ForEach(readyForReviewSessions.sorted { $0.priority.rawValue > $1.priority.rawValue }) { session in
+                    ForEach(readyForReviewSessions.sorted { $0.priority.priorityValue > $1.priority.priorityValue }) { session in
                         SessionRowView(session: session, store: store)
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Ready for Review")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(readyForReviewSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
+                    SectionHeaderView(title: "Ready for Review", count: readyForReviewSessions.count)
+                }
+            }
+            
+            if !processingSessions.isEmpty {
+                Section {
+                    ForEach(processingSessions.sorted { $0.priority.priorityValue > $1.priority.priorityValue }) { session in
+                        SessionRowView(session: session, store: store)
+                            .tag(session.id)
                     }
+                } header: {
+                    SectionHeaderView(title: "Processing", count: processingSessions.count)
                 }
             }
             
             if !queuedSessions.isEmpty {
                 Section {
-                    ForEach(queuedSessions.sorted { $0.priority.rawValue > $1.priority.rawValue }) { session in
+                    ForEach(queuedSessions.sorted { $0.priority.priorityValue > $1.priority.priorityValue }) { session in
                         SessionRowView(session: session, store: store)
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Queued")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(queuedSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
+                    SectionHeaderView(title: "Queued", count: queuedSessions.count)
                 }
             }
             
@@ -92,14 +66,7 @@ struct SessionsView: View {
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Idle")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(idleSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
+                    SectionHeaderView(title: "Idle", count: idleSessions.count)
                 }
             }
             
@@ -110,32 +77,19 @@ struct SessionsView: View {
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Failed")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(failedSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
+                    SectionHeaderView(title: "Failed", count: failedSessions.count)
                 }
             }
             
             if !archivedSessions.isEmpty {
-                Section {
+                Section(isExpanded: $isArchivedExpanded) {
                     ForEach(archivedSessions.sorted { $0.completedAt ?? $0.lastActiveAt > $1.completedAt ?? $1.lastActiveAt }) { session in
                         SessionRowView(session: session, store: store)
                             .tag(session.id)
                     }
                 } header: {
-                    HStack {
-                        Text("Archived")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .medium))
-                        Text("\(archivedSessions.count)")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12, weight: .regular))
-                    }
+                    SectionHeaderView(title: "Archived", count: archivedSessions.count)
+                        .opacity(0.5)
                 }
             }
         }

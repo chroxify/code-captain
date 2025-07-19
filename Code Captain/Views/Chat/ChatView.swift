@@ -21,11 +21,6 @@ struct ChatView: View {
         
         return AnyView(
             VStack(spacing: 0) {
-                // Header
-                ChatHeaderView(session: session, store: store)
-                
-                Divider()
-                
                 // Messages
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -65,77 +60,7 @@ struct ChatView: View {
     }
 }
 
-struct ChatHeaderView: View {
-    let session: Session?
-    @ObservedObject var store: CodeCaptainStore
-    
-    var body: some View {
-        guard let session = session else {
-            return AnyView(
-                HStack {
-                    Text("Session not found")
-                        .foregroundColor(.red)
-                    Spacer()
-                }
-                .padding()
-                .background(Color(NSColor.controlBackgroundColor))
-            )
-        }
-        
-        return AnyView(
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Image(systemName: session.state.systemImageName)
-                            .foregroundColor(colorForState(session.state))
-                        
-                        Text(session.displayName)
-                            .font(.headline)
-                        
-                        Text("•")
-                            .foregroundColor(.secondary)
-                        
-                        Text(session.state.displayName)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    if let project = store.projects.first(where: { $0.id == session.projectId }) {
-                        Text(project.displayName)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                // Session status indicator
-                HStack(spacing: 12) {
-                    LiveActivityIndicator(state: session.state)
-                    
-                    Text(session.state.displayName)
-                        .font(.caption)
-                        .foregroundColor(colorForState(session.state))
-                }
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-        )
-    }
-    
-    private func colorForState(_ state: SessionState) -> Color {
-        switch state {
-        case .idle: return .secondary
-        case .processing: return .orange
-        case .waitingForInput: return .yellow
-        case .readyForReview: return .green
-        case .error: return .red
-        case .queued: return .blue
-        case .archived: return .brown
-        case .failed: return .red
-        }
-    }
-}
+// ChatHeaderView removed - info now shown in toolbar
 
 struct MessageBubbleView: View {
     let message: Message
