@@ -8,11 +8,12 @@ class SessionService: ObservableObject {
     private let providerService: ProviderService
     private var cancellables = Set<AnyCancellable>()
     private let instanceId = UUID()
+    private let logger = Logger.shared
     
     init(projectService: ProjectService) {
         self.projectService = projectService
         self.providerService = ProviderService()
-        print("DEBUG: SessionService instance created with ID: \(instanceId)")
+        logger.debug("SessionService instance created with ID: \(instanceId)", category: .session)
         loadSessions()
     }
     
@@ -62,7 +63,7 @@ class SessionService: ObservableObject {
                 await updateSession(updatedSession)
             }
             
-            print("DEBUG: SessionService(\(instanceId)) initialized session \(session.id) with provider session ID: \(session.providerSessionId ?? "none")")
+            logger.debug("SessionService(\(instanceId)) initialized session \(session.id) with provider session ID: \(session.providerSessionId ?? "none")", category: .session)
             
         } catch {
             updatedSession.updateState(.error)
@@ -76,7 +77,7 @@ class SessionService: ObservableObject {
     
     func sendMessage(_ content: String, to session: Session) async throws {
         guard session.canSendMessage else {
-            print("DEBUG: Cannot send message - session cannot receive messages. State: \(session.state)")
+            logger.warning("Cannot send message - session cannot receive messages. State: \(session.state)", category: .session)
             throw SessionError.sessionNotActive
         }
         
@@ -85,7 +86,7 @@ class SessionService: ObservableObject {
         updatedSession.updateState(.processing)
         await updateSession(updatedSession)
         
-        print("DEBUG: SessionService(\(instanceId)) sending message to session \(session.id): \(content)")
+        logger.debug("SessionService(\(instanceId)) sending message to session \(session.id): \(content)", category: .session)
         
         // Create user message
         let userMessage = Message(sessionId: session.id, content: content, role: .user)
@@ -94,7 +95,7 @@ class SessionService: ObservableObject {
         updatedSession.addMessage(userMessage)
         await updateSession(updatedSession)
         
-        print("DEBUG: User message added to session")
+        logger.debug("User message added to session", category: .session)
         
         // Get project for working directory
         guard let project = await getProject(for: session) else {
@@ -143,7 +144,7 @@ class SessionService: ObservableObject {
                 
                 // Always update the session ID to ensure proper session evolution
                 if currentSessionId != newSessionId {
-                    print("DEBUG: Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)")
+                    logger.debug("Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)", category: .session)
                     updatedSession.setProviderSessionId(newSessionId)
                 }
             }
@@ -152,15 +153,15 @@ class SessionService: ObservableObject {
             updatedSession.updateState(.readyForReview)
             await updateSession(updatedSession)
             
-            print("DEBUG: Message sent to Claude Code successfully")
+            logger.debug("Message sent to Claude Code successfully", category: .session)
             
         } catch {
-            print("DEBUG: Error sending message to Claude Code: \(error)")
+            logger.error("Error sending message to Claude Code: \(error)", category: .session)
             
             // If the error is about session not found, clear the session ID and try to create a new one
             if error.localizedDescription.contains("No conversation found") {
                 
-                print("DEBUG: Session ID invalid, clearing and creating new session")
+                logger.debug("Session ID invalid, clearing and creating new session", category: .session)
                 updatedSession.setProviderSessionId(nil as String?)
                 await updateSession(updatedSession)
                 
@@ -173,7 +174,7 @@ class SessionService: ObservableObject {
                     // Retry sending the message with new session
                     return try await sendMessage(content, to: updatedSession)
                 } catch {
-                    print("DEBUG: Failed to create new session: \(error)")
+                    logger.error("Failed to create new session: \(error)", category: .session)
                     throw error
                 }
             }
@@ -211,7 +212,7 @@ class SessionService: ObservableObject {
         updatedSession.updateState(.queued)
         await updateSession(updatedSession)
         
-        print("DEBUG: SessionService(\(instanceId)) queued session \(session.id)")
+        logger.debug("SessionService(\(instanceId)) queued session \(session.id)", category: .session)
     }
     
     func archiveSession(_ session: Session) async throws {
@@ -224,7 +225,7 @@ class SessionService: ObservableObject {
         updatedSession.updateState(.archived)
         await updateSession(updatedSession)
         
-        print("DEBUG: SessionService(\(instanceId)) archived session \(session.id)")
+        logger.debug("SessionService(\(instanceId)) archived session \(session.id)", category: .session)
     }
     
     func unarchiveSession(_ session: Session) async throws {
@@ -237,7 +238,7 @@ class SessionService: ObservableObject {
         updatedSession.updateState(.idle)
         await updateSession(updatedSession)
         
-        print("DEBUG: SessionService(\(instanceId)) unarchived session \(session.id)")
+        logger.debug("SessionService(\(instanceId)) unarchived session \(session.id)", category: .session)
     }
     
     func updateSessionPriority(_ session: Session, priority: SessionPriority) async throws {
@@ -246,7 +247,7 @@ class SessionService: ObservableObject {
         updatedSession.updatePriority(priority)
         await updateSession(updatedSession)
         
-        print("DEBUG: SessionService(\(instanceId)) updated session \(session.id) priority to \(priority.displayName)")
+        logger.debug("SessionService(\(instanceId)) updated session \(session.id) priority to \(priority.displayName)", category: .session)
     }
     
     // MARK: - Message Monitoring
@@ -256,12 +257,12 @@ class SessionService: ObservableObject {
     func sendMessageStream(_ content: String, to session: Session) -> AsyncStream<Message> {
         guard session.canSendMessage else {
             return AsyncStream { continuation in
-                print("DEBUG: Cannot send message - session cannot receive messages. State: \(session.state)")
+                logger.warning("Cannot send message - session cannot receive messages. State: \(session.state)", category: .session)
                 continuation.finish()
             }
         }
         
-        print("DEBUG: SessionService(\(instanceId)) sending streaming message to session \(session.id): \(content)")
+        logger.debug("SessionService(\(instanceId)) sending streaming message to session \(session.id): \(content)", category: .session)
         
         return AsyncStream { continuation in
             Task {
@@ -279,16 +280,16 @@ class SessionService: ObservableObject {
                 
                 // Get project for working directory
                 guard let project = await getProject(for: session) else {
-                    print("DEBUG: Project not found for session")
+                    logger.warning("Project not found for session", category: .session)
                     continuation.finish()
                     return
                 }
                 
                 // Create stream for Claude Code responses
                 if let providerSessionId = session.providerSessionId {
-                    print("DEBUG: SessionService sending message with existing provider session ID: \(providerSessionId)")
+                    logger.debug("SessionService sending message with existing provider session ID: \(providerSessionId)", category: .session)
                 } else {
-                    print("DEBUG: SessionService sending message without provider session ID (will start new session)")
+                    logger.debug("SessionService sending message without provider session ID (will start new session)", category: .session)
                 }
                 
                 let messageStream = providerService.sendMessageStream(
@@ -300,7 +301,7 @@ class SessionService: ObservableObject {
                 
                 // Process each streaming message
                 for await sdkMessage in messageStream {
-                    print("DEBUG: Received streaming SDK message: \(sdkMessage.id)")
+                    logger.debug("Received streaming SDK message: \(sdkMessage.id)", category: .communication)
                     
                     let message = Message(from: sdkMessage, sessionId: session.id)
                     updatedSession.addMessage(message)
@@ -312,7 +313,7 @@ class SessionService: ObservableObject {
                         
                         // Always update the session ID to ensure proper session evolution
                         if currentSessionId != newSessionId {
-                            print("DEBUG: Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)")
+                            logger.debug("Updating session ID from \(currentSessionId ?? "nil") to \(newSessionId)", category: .session)
                             updatedSession.setProviderSessionId(newSessionId)
                         }
                     }
@@ -330,7 +331,7 @@ class SessionService: ObservableObject {
                 updatedSession.updateState(.readyForReview)
                 await updateSession(updatedSession)
                 
-                print("DEBUG: Streaming completed for session \(session.id)")
+                logger.debug("Streaming completed for session \(session.id)", category: .session)
                 continuation.finish()
             }
         }
@@ -388,9 +389,9 @@ class SessionService: ObservableObject {
                         session.updateTodos(updatedTodos)
                         
                         if newTodos.isEmpty {
-                            print("DEBUG: Cleared all todos from streaming message: \(sdkMessage.id)")
+                            logger.debug("Cleared all todos from streaming message: \(sdkMessage.id)", category: .session)
                         } else {
-                            print("DEBUG: Extracted \(newTodos.count) todos from streaming message: \(sdkMessage.id)")
+                            logger.debug("Extracted \(newTodos.count) todos from streaming message: \(sdkMessage.id)", category: .session)
                         }
                     }
                 }
@@ -429,7 +430,7 @@ class SessionService: ObservableObject {
         // Update session with extracted todos
         if !allTodos.isEmpty {
             session.updateTodos(allTodos)
-            print("DEBUG: Extracted \(allTodos.count) todos from session messages")
+            logger.debug("Extracted \(allTodos.count) todos from session messages", category: .session)
         }
     }
     
@@ -538,9 +539,9 @@ class SessionService: ObservableObject {
         
         if !deletedTodos.isEmpty {
             if newTodos.isEmpty {
-                print("DEBUG: Clearing all \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })")
+                logger.debug("Clearing all \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })", category: .session)
             } else {
-                print("DEBUG: Deleting \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })")
+                logger.debug("Deleting \(deletedTodos.count) todos: \(deletedTodos.map { $0.content })", category: .session)
             }
         }
         

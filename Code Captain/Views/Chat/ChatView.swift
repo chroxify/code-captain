@@ -48,15 +48,17 @@ struct ChatView: View {
                     }
                     .onChange(of: store.scrollToMessage) { messageId in
                         if let messageId = messageId {
-                            print(
-                                "📜 ChatView received scroll request for message: \(messageId)"
+                            Logger.shared.debug(
+                                "📜 ChatView received scroll request for message: \(messageId)",
+                                category: .ui
                             )
                             // Check if message exists in current session
                             if session.messages.contains(where: {
                                 $0.id == messageId
                             }) {
-                                print(
-                                    "✅ Message found in current session, scrolling..."
+                                Logger.shared.debug(
+                                    "✅ Message found in current session, scrolling...",
+                                    category: .ui
                                 )
                                 // Add a longer delay to ensure the view is fully loaded
                                 DispatchQueue.main.asyncAfter(
@@ -69,10 +71,10 @@ struct ChatView: View {
                                             anchor: .center
                                         )
                                     }
-                                    print("🎯 Scrolled to message")
+                                    Logger.shared.debug("🎯 Scrolled to message", category: .ui)
                                 }
                             } else {
-                                print("❌ Message not found in current session")
+                                Logger.shared.debug("❌ Message not found in current session", category: .ui)
                             }
                             // Clear the scroll request
                             DispatchQueue.main.asyncAfter(
@@ -1431,8 +1433,9 @@ struct ChatInputView: View {
                     to: session
                 )
                 for await streamedMessage in messageStream {
-                    print(
-                        "DEBUG: Received streamed message: \(streamedMessage.id)"
+                    Logger.shared.debug(
+                        "Received streamed message: \(streamedMessage.id)",
+                        category: .communication
                     )
                     // The message is already added to the session in the stream
                     // UI will update automatically via @Published sessions

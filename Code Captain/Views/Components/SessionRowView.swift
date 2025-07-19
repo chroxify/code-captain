@@ -100,7 +100,7 @@ struct SessionRowView: View {
             // If this session was just selected and we have a matching message, scroll to it
             if selectedId == session.id, let matchingMessage = matchingMessage {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    print("🔍 Setting scroll to message: \(matchingMessage.content.prefix(50))...")
+                    Logger.shared.debug("🔍 Setting scroll to message: \(matchingMessage.content.prefix(50))...", category: .ui)
                     store.scrollToMessage = matchingMessage.id
                 }
             }
