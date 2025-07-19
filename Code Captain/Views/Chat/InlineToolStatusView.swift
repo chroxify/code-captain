@@ -14,6 +14,8 @@ struct InlineToolStatusView: View {
                 Image(systemName: toolStatus.customIconName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(toolIconColor)
+                    .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
 
                 // Status label with chevron right next to it
                 HStack(spacing: 6) {
@@ -135,7 +137,7 @@ struct InlineToolStatusView: View {
             .font(.caption)
             .foregroundColor(.secondary)
             .lineLimit(3)
-            .padding(.leading, 22)  // Align with text after icon
+            .padding(.leading, 24)  // Align with text after icon
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -148,7 +150,7 @@ struct InlineToolStatusView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxHeight: 200)
-        .padding(.leading, 22)  // Align with text after icon
+        .padding(.leading, 24)  // Align with text after icon
     }
 }
 
