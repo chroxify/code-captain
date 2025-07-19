@@ -7,16 +7,32 @@ struct MainView: View {
     @State private var showingSettings = false
     @State private var isInspectorPresented = false
     @State private var currentSidebarView: SidebarViewType = .projects
-    
+
     var body: some View {
         NavigationSplitView {
             SidebarView(store: store, currentView: $currentSidebarView)
                 .navigationSplitViewColumnWidth(min: 250, ideal: 300)
+                .toolbar {
+                    Spacer()
+                    Button(action: {
+                        showingAddSession = true
+                    }) {
+                        Image(systemName: "rectangle.stack.badge.plus")
+                    }
+                    .help("New Session")
+                }
         } detail: {
-            DetailView(store: store, isInspectorPresented: $isInspectorPresented)
+            DetailView(
+                store: store,
+                isInspectorPresented: $isInspectorPresented
+            )
         }
         .inspector(isPresented: $isInspectorPresented) {
-            InspectorView(session: store.selectedSession, store: store, isInspectorPresented: $isInspectorPresented)
+            InspectorView(
+                session: store.selectedSession,
+                store: store,
+                isInspectorPresented: $isInspectorPresented
+            )
         }
         .sheet(isPresented: $showingAddProject) {
             AddProjectView(store: store)
@@ -37,62 +53,84 @@ struct MainView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                // Session status indicator
-                if let session = store.selectedSession {
-                    HStack(spacing: 8) {
-                        LiveActivityIndicator(state: session.state).scaleEffect(1.1)
-                        
-                        VStack(alignment: .leading) {
+            ToolbarItem(placement: .navigation) {
+                // Consistent layout container to prevent positioning jumps
+                HStack(alignment: .center, spacing: 8) {
+                    if let session = store.selectedSession {
+                        LiveActivityIndicator(state: session.state).scaleEffect(
+                            1.1
+                        )
+
+                        VStack(alignment: .leading, spacing: 2) {
                             // Session name (top row)
                             Text(session.displayName)
                                 .font(.system(size: 12, weight: .medium))
+                                .fixedSize(horizontal: true, vertical: false)
                                 .lineLimit(1)
-                            
+
                             // Project, status, and todos (bottom row)
                             HStack(spacing: 4) {
                                 // Project name
-                                if let project = store.projects.first(where: { $0.id == session.projectId }) {
+                                if let project = store.projects.first(where: {
+                                    $0.id == session.projectId
+                                }) {
                                     Text(project.displayName)
-                                        .font(.system(size: 11, weight: .regular))
+                                        .font(
+                                            .system(size: 11, weight: .regular)
+                                        )
                                         .foregroundColor(.secondary)
-                                        .animation(.none, value: project.displayName)
-                                    
+                                        .animation(
+                                            .none,
+                                            value: project.displayName
+                                        )
+
                                     Text("•")
                                         .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                 }
-                                
+
                                 // Status
                                 Text(session.state.displayName)
                                     .font(.system(size: 11, weight: .regular))
-                                    .foregroundColor(colorForState(session.state))
+                                    .foregroundColor(
+                                        colorForState(session.state)
+                                    )
                                     .animation(.none, value: session.state)
-                                
+
                                 // Todo count if todos exist
                                 if !session.todos.isEmpty {
-                                    Text("• \(session.completedTodosCount)/\(session.totalTodosCount)")
-                                        .font(.system(size: 11, weight: .regular))
-                                        .foregroundColor(.secondary)
+                                    Text(
+                                        "• \(session.completedTodosCount)/\(session.totalTodosCount)"
+                                    )
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundColor(.secondary)
                                 }
                             }
+                            .fixedSize(horizontal: true, vertical: false)
                         }
+                    } else {
+                        // Invisible placeholder to maintain consistent positioning
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("")
+                                .font(.system(size: 12, weight: .medium))
+
+                            HStack(spacing: 4) {
+                                Text("")
+                                    .font(.system(size: 11, weight: .regular))
+                            }
+                        }
+                        .opacity(0)
                     }
                 }
-
-                
-                Spacer()
+                .fixedSize(horizontal: true, vertical: false)
+                .animation(.none, value: store.selectedSession?.id)
             }
-            
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: {
-                    showingAddSession = true
-                }) {
-                    Image(systemName: "plus")
-                }
-                .disabled(store.selectedProject == nil)
-                .help("New Session")
-                
+
+            ToolbarItem(placement: .principal) {
+                Color.clear
+            }
+
+            ToolbarItemGroup(placement: .automatic) {
                 Button(action: {
                     showingAddProject = true
                 }) {
@@ -102,7 +140,7 @@ struct MainView: View {
             }
         }
     }
-    
+
     private func colorForState(_ state: SessionState) -> Color {
         switch state {
         case .idle: return .secondary
