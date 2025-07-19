@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import SwiftUIIntrospect
 
 struct ChatView: View {
     let sessionId: UUID
@@ -27,133 +26,145 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // Messages
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            LazyVStack(spacing: 16) {
-                                ForEach(session.messages) { message in
-                                    MessageBubbleView(message: message)
-                                        .id(message.id)
+                    FloatingScrollView(background: .color(NSColor.controlBackgroundColor)) {
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                LazyVStack(spacing: 16) {
+                                    ForEach(session.messages) { message in
+                                        MessageBubbleView(message: message)
+                                            .id(message.id)
+                                    }
                                 }
+                                .padding()
+
+                                // Bottom anchor with extra spacing - positioned after the padding
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(height: 16)
+                                    .id("bottom-anchor")
                             }
-                            .padding()
-                            
-                            // Bottom anchor with extra spacing - positioned after the padding
-                            Rectangle()
-                                .fill(Color.clear)
-                                .frame(height: 16)
-                                .id("bottom-anchor")
                         }
-                    }
-                    .onScrollGeometryChange(for: Bool.self) { geometry in
-                        // Check if user is in the last 20% of the scrollable content
-                        let scrollableHeight = max(0, geometry.contentSize.height - geometry.containerSize.height)
-                        let currentScrollPosition = max(0, geometry.contentOffset.y)
-                        
-                        // If there's no scrollable content, user is always "at bottom"
-                        guard scrollableHeight > 0 else { return true }
-                        
-                        let bottomThreshold = scrollableHeight * 0.8 // Last 20% of content
-                        let isInBottomSection = currentScrollPosition >= bottomThreshold
-                        
-                        // Debug logging
-                        Logger.shared.debug(
-                            "📊 Scroll: content=\(geometry.contentSize.height), container=\(geometry.containerSize.height), scrollable=\(scrollableHeight), position=\(currentScrollPosition), threshold=\(bottomThreshold), inBottom=\(isInBottomSection)",
-                            category: .ui
-                        )
-                        
-                        return isInBottomSection
-                    } action: { oldValue, newValue in
-                        Logger.shared.debug(
-                            "🔄 Scroll state changed: \(oldValue) → \(newValue)",
-                            category: .ui
-                        )
-                        if isUserNearBottom != newValue {
-                            isUserNearBottom = newValue
+                        .onScrollGeometryChange(for: Bool.self) { geometry in
+                            // Check if user is in the last 20% of the scrollable content
+                            let scrollableHeight = max(
+                                0,
+                                geometry.contentSize.height
+                                    - geometry.containerSize.height
+                            )
+                            let currentScrollPosition = max(
+                                0,
+                                geometry.contentOffset.y
+                            )
+
+                            // If there's no scrollable content, user is always "at bottom"
+                            guard scrollableHeight > 0 else { return true }
+
+                            let bottomThreshold = scrollableHeight * 0.8  // Last 20% of content
+                            let isInBottomSection =
+                                currentScrollPosition >= bottomThreshold
+
+                            // Debug logging
                             Logger.shared.debug(
-                                "👤 User near bottom updated to: \(newValue)",
+                                "📊 Scroll: content=\(geometry.contentSize.height), container=\(geometry.containerSize.height), scrollable=\(scrollableHeight), position=\(currentScrollPosition), threshold=\(bottomThreshold), inBottom=\(isInBottomSection)",
                                 category: .ui
                             )
-                        }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .onAppear {
-                        // Always scroll to bottom with padding visible on appear
-                        DispatchQueue.main.async {
-                            proxy.scrollTo("bottom-anchor", anchor: .bottom)
-                            lastMessageCount = session.messages.count
-                        }
-                    }
-                    .onChange(of: session.messages.count) {
-                        let currentCount = session.messages.count
-                        
-                        Logger.shared.debug(
-                            "📝 Message count: \(lastMessageCount) → \(currentCount), userNearBottom: \(isUserNearBottom)",
-                            category: .ui
-                        )
-                        
-                        // Only auto-scroll if user is near the bottom (following the conversation)
-                        // Don't auto-scroll just because count increased - user might be reading history
-                        if isUserNearBottom {
+
+                            return isInBottomSection
+                        } action: { oldValue, newValue in
                             Logger.shared.debug(
-                                "✅ Auto-scrolling because user is near bottom",
+                                "🔄 Scroll state changed: \(oldValue) → \(newValue)",
                                 category: .ui
                             )
-                            DispatchQueue.main.async {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    proxy.scrollTo("bottom-anchor", anchor: .bottom)
-                                }
-                            }
-                        } else {
-                            Logger.shared.debug(
-                                "❌ Not auto-scrolling - user is reading history",
-                                category: .ui
-                            )
-                        }
-                        
-                        lastMessageCount = currentCount
-                    }
-                    .onChange(of: store.scrollToMessage) { messageId in
-                        if let messageId = messageId {
-                            Logger.shared.debug(
-                                "📜 ChatView received scroll request for message: \(messageId)",
-                                category: .ui
-                            )
-                            // Check if message exists in current session
-                            if session.messages.contains(where: {
-                                $0.id == messageId
-                            }) {
+                            if isUserNearBottom != newValue {
+                                isUserNearBottom = newValue
                                 Logger.shared.debug(
-                                    "✅ Message found in current session, scrolling...",
+                                    "👤 User near bottom updated to: \(newValue)",
                                     category: .ui
                                 )
-                                // Add a longer delay to ensure the view is fully loaded
-                                DispatchQueue.main.asyncAfter(
-                                    deadline: .now() + 0.3
-                                ) {
-                                    // Scroll to the specific message
-                                    withAnimation(.easeInOut(duration: 0.5)) {
+                            }
+                        }
+                        .onAppear {
+                            // Always scroll to bottom with padding visible on appear
+                            DispatchQueue.main.async {
+                                proxy.scrollTo("bottom-anchor", anchor: .bottom)
+                                lastMessageCount = session.messages.count
+                            }
+                        }
+                        .onChange(of: session.messages.count) {
+                            let currentCount = session.messages.count
+
+                            Logger.shared.debug(
+                                "📝 Message count: \(lastMessageCount) → \(currentCount), userNearBottom: \(isUserNearBottom)",
+                                category: .ui
+                            )
+
+                            // Only auto-scroll if user is near the bottom (following the conversation)
+                            // Don't auto-scroll just because count increased - user might be reading history
+                            if isUserNearBottom {
+                                Logger.shared.debug(
+                                    "✅ Auto-scrolling because user is near bottom",
+                                    category: .ui
+                                )
+                                DispatchQueue.main.async {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
                                         proxy.scrollTo(
-                                            messageId,
-                                            anchor: .center
+                                            "bottom-anchor",
+                                            anchor: .bottom
                                         )
                                     }
-                                    Logger.shared.debug(
-                                        "🎯 Scrolled to message",
-                                        category: .ui
-                                    )
                                 }
                             } else {
                                 Logger.shared.debug(
-                                    "❌ Message not found in current session",
+                                    "❌ Not auto-scrolling - user is reading history",
                                     category: .ui
                                 )
                             }
-                            // Clear the scroll request
-                            DispatchQueue.main.asyncAfter(
-                                deadline: .now() + 1.0
-                            ) {
-                                store.scrollToMessage = nil
+
+                            lastMessageCount = currentCount
+                        }
+                        .onChange(of: store.scrollToMessage) { messageId in
+                            if let messageId = messageId {
+                                Logger.shared.debug(
+                                    "📜 ChatView received scroll request for message: \(messageId)",
+                                    category: .ui
+                                )
+                                // Check if message exists in current session
+                                if session.messages.contains(where: {
+                                    $0.id == messageId
+                                }) {
+                                    Logger.shared.debug(
+                                        "✅ Message found in current session, scrolling...",
+                                        category: .ui
+                                    )
+                                    // Add a longer delay to ensure the view is fully loaded
+                                    DispatchQueue.main.asyncAfter(
+                                        deadline: .now() + 0.3
+                                    ) {
+                                        // Scroll to the specific message
+                                        withAnimation(.easeInOut(duration: 0.5))
+                                        {
+                                            proxy.scrollTo(
+                                                messageId,
+                                                anchor: .center
+                                            )
+                                        }
+                                        Logger.shared.debug(
+                                            "🎯 Scrolled to message",
+                                            category: .ui
+                                        )
+                                    }
+                                } else {
+                                    Logger.shared.debug(
+                                        "❌ Message not found in current session",
+                                        category: .ui
+                                    )
+                                }
+                                // Clear the scroll request
+                                DispatchQueue.main.asyncAfter(
+                                    deadline: .now() + 1.0
+                                ) {
+                                    store.scrollToMessage = nil
+                                }
                             }
                         }
                     }
@@ -171,6 +182,7 @@ struct ChatView: View {
             .navigationTitle(session.displayName)
         )
     }
+
 }
 
 #Preview {

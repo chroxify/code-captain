@@ -1,5 +1,5 @@
 //
-//  FloatingSidebarScroll.swift
+//  FloatingScrollView.swift
 //  Code Captain
 //
 //  Created by Christo Todorov on 19.07.25.
@@ -8,10 +8,20 @@
 import AppKit
 import SwiftUI
 
-struct FloatingSidebarScroll<Content: View>: NSViewRepresentable {
-    let content: () -> Content
+enum FloatingScrollBackground {
+    case sidebar
+    case color(NSColor)
+}
 
-    init(@ViewBuilder content: @escaping () -> Content) {
+struct FloatingScrollView<Content: View>: NSViewRepresentable {
+    let content: () -> Content
+    let background: FloatingScrollBackground
+
+    init(
+        background: FloatingScrollBackground = .sidebar,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.background = background
         self.content = content
     }
 
@@ -52,49 +62,66 @@ struct FloatingSidebarScroll<Content: View>: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSView {
-        let visualEffectView = NSVisualEffectView()
-        visualEffectView.material = .sidebar
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.backgroundColor = NSColor.clear.cgColor
+        let containerView: NSView
 
-        context.coordinator.visualEffectView = visualEffectView
+        switch background {
+        case .sidebar:
+            let visualEffectView = NSVisualEffectView()
+            visualEffectView.material = .sidebar
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.state = .active
+            visualEffectView.wantsLayer = true
+            visualEffectView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        // Hosting the List (or any Content) directly here
+            context.coordinator.visualEffectView = visualEffectView
+            containerView = visualEffectView
+
+        case .color(let color):
+            let visualEffectView = NSVisualEffectView()
+            visualEffectView.material = .sidebar  // must be sidebar to suppress scroll track
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.state = .active
+            visualEffectView.wantsLayer = true
+            visualEffectView.layer?.backgroundColor = .clear
+
+            // Add custom background color layer
+            let backgroundLayer = CALayer()
+            backgroundLayer.backgroundColor = color.cgColor
+            backgroundLayer.frame = visualEffectView.bounds
+            backgroundLayer.autoresizingMask = [
+                .layerWidthSizable, .layerHeightSizable,
+            ]
+            visualEffectView.layer?.addSublayer(backgroundLayer)
+
+            containerView = visualEffectView
+        }
+
         let hostingView = NSHostingView(rootView: content())
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        visualEffectView.addSubview(hostingView)
+        containerView.addSubview(hostingView)
 
         NSLayoutConstraint.activate([
             hostingView.leadingAnchor.constraint(
-                equalTo: visualEffectView.leadingAnchor
+                equalTo: containerView.leadingAnchor
             ),
             hostingView.trailingAnchor.constraint(
-                equalTo: visualEffectView.trailingAnchor
+                equalTo: containerView.trailingAnchor
             ),
-            hostingView.topAnchor.constraint(
-                equalTo: visualEffectView.topAnchor
-            ),
+            hostingView.topAnchor.constraint(equalTo: containerView.topAnchor),
             hostingView.bottomAnchor.constraint(
-                equalTo: visualEffectView.bottomAnchor
+                equalTo: containerView.bottomAnchor
             ),
         ])
 
-        return visualEffectView
+        return containerView
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        guard let visualEffectView = nsView as? NSVisualEffectView else {
-            return
-        }
-
-        // Find the NSHostingView child
         guard
-            let hostingView = visualEffectView.subviews.compactMap({
+            let hostingView = nsView.subviews.compactMap({
                 $0 as? NSHostingView<Content>
             }).first
         else {
@@ -104,21 +131,20 @@ struct FloatingSidebarScroll<Content: View>: NSViewRepresentable {
         hostingView.rootView = content()
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
 
-        // Now find the internal NSScrollView inside hostingView's subviews (SwiftUI List embeds one)
         if let scrollView = findScrollView(in: hostingView) {
             scrollView.scrollerStyle = .overlay
             scrollView.drawsBackground = false
             scrollView.backgroundColor = .clear
         }
 
-        if let window = nsView.window, window.isKeyWindow {
-            visualEffectView.state = .active
-        } else {
-            visualEffectView.state = .inactive
+        if case .sidebar = background,
+            let visualEffectView = nsView as? NSVisualEffectView
+        {
+            visualEffectView.state =
+                nsView.window?.isKeyWindow == true ? .active : .inactive
         }
     }
 
-    // Helper to recursively find NSScrollView inside a view hierarchy
     private func findScrollView(in view: NSView) -> NSScrollView? {
         if let scrollView = view as? NSScrollView {
             return scrollView

@@ -47,9 +47,7 @@ struct SidebarView: View {
             SessionsView(store: store, searchText: searchText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 8)
-                .scrollIndicators(.hidden)
         }
         .navigationTitle("Code Captain")
-        .scrollIndicators(.hidden)
     }
 }

@@ -55,7 +55,7 @@ struct SessionsView: View {
     }
 
     var body: some View {
-        FloatingSidebarScroll {
+        FloatingScrollView(background: .sidebar) {
             List(selection: $store.selectedSessionId) {
                 let processingSessions = filteredSessions.filter {
                     $0.state == .processing
