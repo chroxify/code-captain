@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 struct RichMessageView: View {
     let message: Message  // Use Message instead of SDKMessage directly
@@ -36,7 +37,7 @@ struct RichMessageView: View {
                         case .text(let text):
                             HStack {
                                 Spacer(minLength: 60)
-                                Text(LocalizedStringKey(convertHeadingsToBold(text)))
+                                Markdown(text)
                                     .font(.body)
                                     .textSelection(.enabled)
                                     .padding(.horizontal, 16)
@@ -53,7 +54,7 @@ struct RichMessageView: View {
                                 if block.type != "tool_result", let content = block.content {
                                     HStack {
                                         Spacer(minLength: 60)
-                                        Text(LocalizedStringKey(convertHeadingsToBold(content)))
+                                        Markdown(content)
                                             .font(.body)
                                             .textSelection(.enabled)
                                             .padding(.horizontal, 16)

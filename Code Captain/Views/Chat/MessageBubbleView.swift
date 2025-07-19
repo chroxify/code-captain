@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 struct MessageBubbleView: View {
     let message: Message
@@ -67,7 +68,7 @@ struct MessageBubbleView: View {
                     if message.displayIsFromUser {
                         HStack {
                             Spacer(minLength: 60)
-                            Text(LocalizedStringKey(convertHeadingsToBold(message.displayContent)))
+                            Markdown(message.displayContent)
                                 .font(.body)
                                 .textSelection(.enabled)
                                 .padding(.horizontal, 16)
@@ -76,9 +77,8 @@ struct MessageBubbleView: View {
                                 .cornerRadius(16)
                         }
                     } else {
-                        // AI messages: full width, no background with Markdown rendering
-                        Text(LocalizedStringKey(convertHeadingsToBold(message.displayContent)))
-                            .font(.body)
+                        // AI messages: full width, no background with native Markdown rendering
+                        Markdown(message.displayContent)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }

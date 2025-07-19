@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		261EF52B2E2BD2FA00873AAF /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 261EF52A2E2BD2FA00873AAF /* Shimmer */; };
+		261EF53C2E2C44C800873AAF /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 261EF53B2E2C44C800873AAF /* MarkdownUI */; };
 		268892A62E29C2870060A32E /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 268892A52E29C2870060A32E /* SwiftTerm */; };
 		268892A82E29C2870060A32E /* SwiftTermFuzz in Frameworks */ = {isa = PBXBuildFile; productRef = 268892A72E29C2870060A32E /* SwiftTermFuzz */; };
 /* End PBXBuildFile section */
@@ -61,6 +62,7 @@
 				261EF52B2E2BD2FA00873AAF /* Shimmer in Frameworks */,
 				268892A62E29C2870060A32E /* SwiftTerm in Frameworks */,
 				268892A82E29C2870060A32E /* SwiftTermFuzz in Frameworks */,
+				261EF53C2E2C44C800873AAF /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +126,7 @@
 				268892A52E29C2870060A32E /* SwiftTerm */,
 				268892A72E29C2870060A32E /* SwiftTermFuzz */,
 				261EF52A2E2BD2FA00873AAF /* Shimmer */,
+				261EF53B2E2C44C800873AAF /* MarkdownUI */,
 			);
 			productName = "Code Captain";
 			productReference = 268891DD2E2995A10060A32E /* Code Captain.app */;
@@ -210,6 +213,7 @@
 			packageReferences = (
 				268892A22E29C27A0060A32E /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				261EF5292E2BD2FA00873AAF /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
+				261EF53A2E2C44C800873AAF /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 268891DE2E2995A10060A32E /* Products */;
@@ -577,6 +581,14 @@
 				minimumVersion = 1.5.1;
 			};
 		};
+		261EF53A2E2C44C800873AAF /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.4.1;
+			};
+		};
 		268892A22E29C27A0060A32E /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
@@ -592,6 +604,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 261EF5292E2BD2FA00873AAF /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
 			productName = Shimmer;
+		};
+		261EF53B2E2C44C800873AAF /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 261EF53A2E2C44C800873AAF /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
 		};
 		268892A52E29C2870060A32E /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;

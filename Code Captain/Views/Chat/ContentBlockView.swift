@@ -1,4 +1,5 @@
 import SwiftUI
+import MarkdownUI
 
 struct ContentBlockView: View {
     let contentBlock: ContentBlock
@@ -21,7 +22,7 @@ struct ContentBlockView: View {
     var body: some View {
         switch contentBlock {
         case .text(let textBlock):
-            Text(LocalizedStringKey(convertHeadingsToBold(textBlock.text)))
+            Markdown(textBlock.text)
                 .font(.body)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

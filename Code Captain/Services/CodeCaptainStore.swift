@@ -17,6 +17,11 @@ class CodeCaptainStore: ObservableObject {
     private let sessionService: SessionService
     private var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Persistence Keys
+    private enum UserDefaultsKeys {
+        static let lastSelectedSessionId = "CodeCaptain.lastSelectedSessionId"
+    }
+    
     init() {
         self.projectService = ProjectService()
         self.sessionService = SessionService(
@@ -24,6 +29,7 @@ class CodeCaptainStore: ObservableObject {
         )
         
         setupBindings()
+        loadPersistedState()
     }
     
     // MARK: - Setup
@@ -72,6 +78,44 @@ class CodeCaptainStore: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // Save selectedSessionId to UserDefaults when it changes
+        $selectedSessionId
+            .sink { sessionId in
+                if let sessionId = sessionId {
+                    UserDefaults.standard.set(sessionId.uuidString, forKey: UserDefaultsKeys.lastSelectedSessionId)
+                } else {
+                    UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.lastSelectedSessionId)
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    // MARK: - Persistence
+    
+    private func loadPersistedState() {
+        // Load last selected session ID
+        if let sessionIdString = UserDefaults.standard.string(forKey: UserDefaultsKeys.lastSelectedSessionId),
+           let sessionId = UUID(uuidString: sessionIdString) {
+            
+            // Wait for sessions to be loaded, then restore selection
+            sessionService.$sessions
+                .first { !$0.isEmpty } // Wait for sessions to be loaded
+                .sink { [weak self] sessions in
+                    guard let self = self else { return }
+                    
+                    // Check if the persisted session still exists
+                    if sessions.contains(where: { $0.id == sessionId }) {
+                        self.selectedSessionId = sessionId
+                        Logger.shared.info("Restored last selected session: \(sessionId)", category: .app)
+                    } else {
+                        // Session no longer exists, clear persisted state
+                        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.lastSelectedSessionId)
+                        Logger.shared.info("Last selected session no longer exists, cleared persisted state", category: .app)
+                    }
+                }
+                .store(in: &cancellables)
+        }
     }
     
     // MARK: - Project Management
