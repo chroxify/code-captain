@@ -56,6 +56,7 @@ struct MainView: View {
                                     Text(project.displayName)
                                         .font(.system(size: 11, weight: .regular))
                                         .foregroundColor(.secondary)
+                                        .animation(.none, value: project.displayName)
                                     
                                     Text("•")
                                         .font(.system(size: 11))
@@ -66,6 +67,7 @@ struct MainView: View {
                                 Text(session.state.displayName)
                                     .font(.system(size: 11, weight: .regular))
                                     .foregroundColor(colorForState(session.state))
+                                    .animation(.none, value: session.state)
                                 
                                 // Todo count if todos exist
                                 if !session.todos.isEmpty {
@@ -76,10 +78,8 @@ struct MainView: View {
                             }
                         }
                     }
-                    .animation(.none, value: session.state)
-                    .animation(.none, value: session.todos.count)
-                    .animation(.none, value: session.completedTodosCount)
                 }
+
                 
                 Spacer()
             }

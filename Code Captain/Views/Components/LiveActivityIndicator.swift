@@ -12,13 +12,7 @@ struct LiveActivityIndicator: View {
                 Image(systemName: "circle")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                    .opacity(0.7 + 0.3 * sin(Double(animationOffset)))
                     .frame(width: 16, height: 16)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                            animationOffset = .pi * 2
-                        }
-                    }
             case .processing:
                 // Native spinning progress indicator
                 ProgressView()
@@ -30,41 +24,23 @@ struct LiveActivityIndicator: View {
                 Image(systemName: "hand.raised.circle")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                    .opacity(0.7 + 0.3 * sin(Double(animationOffset)))
                     .frame(width: 16, height: 16)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                            animationOffset = .pi * 2
-                        }
-                    }
                     
             case .readyForReview:
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                    .scaleEffect(1.0 + 0.1 * sin(Double(animationOffset)))
                     .frame(width: 16, height: 16)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                            animationOffset = .pi * 2
-                        }
-                    }
             case .queued:
                 Image(systemName: "clock.badge.plus")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
                     .frame(width: 16, height: 16)
             case .error:
-                Image(systemName: "exclamationmark.cricle")
+                Image(systemName: "exclamationmark.circle")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                    .opacity(0.7 + 0.3 * sin(Double(animationOffset)))
                     .frame(width: 16, height: 16)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) {
-                            animationOffset = .pi * 2
-                        }
-                    }
             case .failed:
                 Image(systemName: "xmark.circle")
                     .font(.system(size: 14))
