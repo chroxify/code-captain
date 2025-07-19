@@ -1,26 +1,17 @@
 import SwiftUI
 
 enum SidebarViewType: String, CaseIterable {
-    case projects = "Projects"
     case sessions = "Agents"
-    case dashboard = "Dashboard"
-    case recent = "Recent"
     
     var systemImageName: String {
         switch self {
-        case .projects: return "folder"
         case .sessions: return "brain"
-        case .dashboard: return "gauge"
-        case .recent: return "clock"
         }
     }
     
     var filledSystemImageName: String {
         switch self {
-        case .projects: return "folder.fill"
         case .sessions: return "brain.fill"
-        case .dashboard: return "gauge.with.dots.needle.33percent"
-        case .recent: return "clock.fill"
         }
     }
 }

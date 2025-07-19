@@ -2,18 +2,55 @@ import SwiftUI
 
 struct SessionsView: View {
     @ObservedObject var store: CodeCaptainStore
+    let searchText: String
     @State private var isArchivedExpanded = false
     @State private var isArchivedHovered = false
     
+    var filteredSessions: [Session] {
+        if searchText.isEmpty {
+            return store.sessions
+        }
+        
+        return store.sessions.filter { session in
+            // Search in session name
+            if session.displayName.localizedCaseInsensitiveContains(searchText) {
+                return true
+            }
+            
+            // Search in messages
+            if session.messages.contains(where: { message in
+                message.content.localizedCaseInsensitiveContains(searchText)
+            }) {
+                return true
+            }
+            
+            // Search in todos
+            if session.todos.contains(where: { todo in
+                todo.content.localizedCaseInsensitiveContains(searchText)
+            }) {
+                return true
+            }
+            
+            // Search in project name
+            if let project = store.projects.first(where: { $0.id == session.projectId }) {
+                if project.displayName.localizedCaseInsensitiveContains(searchText) {
+                    return true
+                }
+            }
+            
+            return false
+        }
+    }
+    
     var body: some View {
         List(selection: $store.selectedSessionId) {
-            let processingSessions = store.sessions.filter { $0.state == .processing }
-            let waitingForInputSessions = store.sessions.filter { $0.state == .waitingForInput }
-            let readyForReviewSessions = store.sessions.filter { $0.state == .readyForReview }
-            let queuedSessions = store.sessions.filter { $0.state == .queued }
-            let idleSessions = store.sessions.filter { $0.state == .idle }
-            let failedSessions = store.sessions.filter { $0.state == .failed || $0.state == .error }
-            let archivedSessions = store.sessions.filter { $0.state == .archived }
+            let processingSessions = filteredSessions.filter { $0.state == .processing }
+            let waitingForInputSessions = filteredSessions.filter { $0.state == .waitingForInput }
+            let readyForReviewSessions = filteredSessions.filter { $0.state == .readyForReview }
+            let queuedSessions = filteredSessions.filter { $0.state == .queued }
+            let idleSessions = filteredSessions.filter { $0.state == .idle }
+            let failedSessions = filteredSessions.filter { $0.state == .failed || $0.state == .error }
+            let archivedSessions = filteredSessions.filter { $0.state == .archived }
             
             if !waitingForInputSessions.isEmpty {
                 Section {

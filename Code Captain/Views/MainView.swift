@@ -6,18 +6,17 @@ struct MainView: View {
     @State private var showingAddSession = false
     @State private var showingSettings = false
     @State private var isInspectorPresented = false
-    @State private var currentSidebarView: SidebarViewType = .projects
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(store: store, currentView: $currentSidebarView)
+            SidebarView(store: store)
                 .navigationSplitViewColumnWidth(min: 250, ideal: 300)
                 .toolbar {
                     Spacer()
                     Button(action: {
                         showingAddSession = true
                     }) {
-                        Image(systemName: "rectangle.stack.badge.plus")
+                        Image(systemName: "square.and.pencil")
                     }
                     .help("New Session")
                 }
@@ -55,13 +54,13 @@ struct MainView: View {
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 // Consistent layout container to prevent positioning jumps
-                HStack(alignment: .center, spacing: 8) {
+                HStack(alignment: .center, spacing: 10) {
                     if let session = store.selectedSession {
                         LiveActivityIndicator(state: session.state).scaleEffect(
                             1.1
                         )
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading) {
                             // Session name (top row)
                             Text(session.displayName)
                                 .font(.system(size: 12, weight: .medium))
@@ -110,7 +109,7 @@ struct MainView: View {
                         }
                     } else {
                         // Invisible placeholder to maintain consistent positioning
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading) {
                             Text("")
                                 .font(.system(size: 12, weight: .medium))
 
@@ -122,6 +121,7 @@ struct MainView: View {
                         .opacity(0)
                     }
                 }
+                .padding(.leading, 6)
                 .fixedSize(horizontal: true, vertical: false)
                 .animation(.none, value: store.selectedSession?.id)
             }
