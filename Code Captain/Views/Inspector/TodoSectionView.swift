@@ -21,7 +21,6 @@ struct TodoSectionView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(NSColor.controlColor))
             
             Divider()
             
@@ -50,7 +49,6 @@ struct TodoSectionView: View {
                     .padding()
                 }
             }
-            .background(Color(NSColor.controlBackgroundColor))
         }
     }
 }
@@ -109,7 +107,6 @@ struct TodoItemView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(todo.status == .completed ? Color.clear : Color(NSColor.controlBackgroundColor))
         .cornerRadius(6)
     }
     

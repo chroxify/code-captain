@@ -704,6 +704,7 @@ struct Message: Identifiable, Codable, Hashable {
     var metadata: MessageMetadata?
     var sdkMessage: SDKMessage?
     var isStreaming: Bool = false
+    var toolStatuses: [ToolStatus] = [] // Per-message tool status storage
     
     init(sessionId: UUID, content: String, role: MessageRole, metadata: MessageMetadata? = nil) {
         self.id = UUID()
@@ -823,6 +824,49 @@ struct Message: Identifiable, Codable, Hashable {
         }
         return false
     }
+    
+    // MARK: - Tool Status Management
+    
+    /// Process and update tool statuses for this message
+    mutating func processToolStatuses() {
+        guard let sdkMessage = self.sdkMessage else { return }
+        
+        let manager = MessageToolStatusManager(messageId: self.id)
+        
+        switch sdkMessage {
+        case .assistant(let assistantMessage):
+            // Only process assistant messages to create tool statuses
+            let newStatuses = manager.processContentBlocks(assistantMessage.message.content)
+            self.toolStatuses = newStatuses
+            
+        case .user(_):
+            // User messages don't create their own tool statuses
+            // Tool completion is handled at the session level
+            break
+            
+        default:
+            break
+        }
+    }
+    
+    /// Get tool status by content block
+    func getToolStatus(for contentBlock: ContentBlock, at index: Int) -> ToolStatus? {
+        let messagePrefix = id.uuidString.prefix(8)
+        let uniqueId: String
+        
+        switch contentBlock {
+        case .thinking(_):
+            uniqueId = "\(messagePrefix)-thinking-\(index)"
+        case .toolUse(let toolUse):
+            uniqueId = "\(messagePrefix)-tool-\(toolUse.id)"
+        case .text(_):
+            uniqueId = "\(messagePrefix)-text-\(index)"
+        default:
+            uniqueId = "\(messagePrefix)-block-\(index)"
+        }
+        
+        return toolStatuses.first { $0.id == uniqueId }
+    }
 }
 
 enum MessageRole: String, CaseIterable, Codable, Hashable {
@@ -857,7 +901,7 @@ struct MessageMetadata: Codable, Hashable {
 
 // MARK: - Tool Action Types
 
-enum ToolAction: String, CaseIterable {
+enum ToolAction: String, CaseIterable, Codable {
     // Core CLI Tools
     case bash = "bash"
     case strReplaceEditor = "str_replace_editor"

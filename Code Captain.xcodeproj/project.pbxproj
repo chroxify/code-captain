@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		261EF52B2E2BD2FA00873AAF /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 261EF52A2E2BD2FA00873AAF /* Shimmer */; };
 		268892A62E29C2870060A32E /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 268892A52E29C2870060A32E /* SwiftTerm */; };
 		268892A82E29C2870060A32E /* SwiftTermFuzz in Frameworks */ = {isa = PBXBuildFile; productRef = 268892A72E29C2870060A32E /* SwiftTermFuzz */; };
 /* End PBXBuildFile section */
@@ -57,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				261EF52B2E2BD2FA00873AAF /* Shimmer in Frameworks */,
 				268892A62E29C2870060A32E /* SwiftTerm in Frameworks */,
 				268892A82E29C2870060A32E /* SwiftTermFuzz in Frameworks */,
 			);
@@ -121,6 +123,7 @@
 			packageProductDependencies = (
 				268892A52E29C2870060A32E /* SwiftTerm */,
 				268892A72E29C2870060A32E /* SwiftTermFuzz */,
+				261EF52A2E2BD2FA00873AAF /* Shimmer */,
 			);
 			productName = "Code Captain";
 			productReference = 268891DD2E2995A10060A32E /* Code Captain.app */;
@@ -206,6 +209,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				268892A22E29C27A0060A32E /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				261EF5292E2BD2FA00873AAF /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 268891DE2E2995A10060A32E /* Products */;
@@ -565,6 +569,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		261EF5292E2BD2FA00873AAF /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/markiv/SwiftUI-Shimmer";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.5.1;
+			};
+		};
 		268892A22E29C27A0060A32E /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
@@ -576,6 +588,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		261EF52A2E2BD2FA00873AAF /* Shimmer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 261EF5292E2BD2FA00873AAF /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
+			productName = Shimmer;
+		};
 		268892A52E29C2870060A32E /* SwiftTerm */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 268892A22E29C27A0060A32E /* XCRemoteSwiftPackageReference "SwiftTerm" */;

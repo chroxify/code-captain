@@ -303,7 +303,11 @@ class SessionService: ObservableObject {
                 for await sdkMessage in messageStream {
                     logger.debug("Received streaming SDK message: \(sdkMessage.id)", category: .communication)
                     
-                    let message = Message(from: sdkMessage, sessionId: session.id)
+                    var message = Message(from: sdkMessage, sessionId: session.id)
+                    
+                    // Process tool statuses for this specific message
+                    message.processToolStatuses()
+                    
                     updatedSession.addMessage(message)
                     
                     // Always update session ID from response (this is critical for session continuity)

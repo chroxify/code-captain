@@ -249,8 +249,130 @@ struct Session: Identifiable, Codable, Hashable {
     }
     
     mutating func addMessage(_ message: Message) {
+        // STEP-BY-STEP STREAMING: Complete any processing steps from previous messages before adding new message
+        completeProcessingStepsFromPreviousMessages()
+        
         messages.append(message)
         self.lastActiveAt = Date()
+        
+        // After adding the message, process cross-message tool completions
+        processToolCompletions()
+    }
+    
+    /// Complete any processing steps from previous messages when a new message/step arrives
+    /// This implements the streaming lifecycle: any new stream/step completes the previous processing step
+    /// IMPORTANT: Only completes thinking blocks and other non-tool steps, NOT tool_use blocks waiting for results
+    private mutating func completeProcessingStepsFromPreviousMessages() {
+        for messageIndex in messages.indices {
+            var message = messages[messageIndex]
+            var hasChanges = false
+            
+            // Complete any processing tool statuses in this message
+            for statusIndex in message.toolStatuses.indices {
+                let toolStatus = message.toolStatuses[statusIndex]
+                
+                if toolStatus.isProcessing {
+                    // Only complete thinking blocks and non-tool processing steps
+                    // tool_use blocks should only be completed by their corresponding tool_result
+                    let shouldComplete = toolStatus.toolType == .task // thinking blocks
+                    
+                    if shouldComplete {
+                        // Complete this processing step
+                        let completedStatus = ToolStatus(
+                            id: toolStatus.id,
+                            toolType: toolStatus.toolType,
+                            state: .completed(duration: Date().timeIntervalSince(toolStatus.startTime)),
+                            preview: toolStatus.preview,
+                            fullContent: toolStatus.fullContent,
+                            startTime: toolStatus.startTime,
+                            endTime: Date()
+                        )
+                        
+                        message.toolStatuses[statusIndex] = completedStatus
+                        hasChanges = true
+                    }
+                }
+            }
+            
+            if hasChanges {
+                messages[messageIndex] = message
+            }
+        }
+    }
+    
+    /// Process tool completions across messages in the session
+    /// This handles the case where tool_use blocks in assistant messages need to be completed
+    /// by tool_result blocks in subsequent user messages
+    private mutating func processToolCompletions() {
+        // Find all pending tool_use blocks in assistant messages
+        var pendingTools: [(messageIndex: Int, toolStatus: ToolStatus)] = []
+        
+        for (messageIndex, message) in messages.enumerated() {
+            for toolStatus in message.toolStatuses {
+                if toolStatus.isProcessing {
+                    pendingTools.append((messageIndex: messageIndex, toolStatus: toolStatus))
+                }
+            }
+        }
+        
+        // Find tool_result blocks in user messages to complete pending tools
+        for (messageIndex, message) in messages.enumerated() {
+            if let sdkMessage = message.sdkMessage,
+               case .user(let userMessage) = sdkMessage,
+               case .blocks(let blocks) = userMessage.message.content {
+                
+                for block in blocks {
+                    if block.type == "tool_result",
+                       let toolUseId = block.tool_use_id {
+                        
+                        // Find the corresponding pending tool
+                        for (pendingIndex, pendingTool) in pendingTools.enumerated() {
+                            let pendingToolStatus = pendingTool.toolStatus
+                            
+                            // Match by tool_use_id (extract from the unique ID)
+                            if pendingToolStatus.id.hasSuffix("tool-\(toolUseId)") {
+                                // Create completed status
+                                let completedStatus = createCompletedToolStatus(
+                                    from: pendingToolStatus,
+                                    result: block.content,
+                                    isError: block.is_error ?? false
+                                )
+                                
+                                // Update the tool status in the original message
+                                let originalMessageIndex = pendingTool.messageIndex
+                                if let statusIndex = messages[originalMessageIndex].toolStatuses.firstIndex(where: { $0.id == pendingToolStatus.id }) {
+                                    messages[originalMessageIndex].toolStatuses[statusIndex] = completedStatus
+                                }
+                                
+                                // Remove from pending list
+                                pendingTools.remove(at: pendingIndex)
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Create a completed tool status from a processing tool status
+    private func createCompletedToolStatus(from activeStatus: ToolStatus, result: String?, isError: Bool) -> ToolStatus {
+        let endTime = Date()
+        let duration = endTime.timeIntervalSince(activeStatus.startTime)
+        
+        let state: ToolStatusState = isError ? 
+            .error(message: result ?? "Unknown error") :
+            .completed(duration: duration)
+        
+        return ToolStatus(
+            id: activeStatus.id,
+            toolType: activeStatus.toolType,
+            state: state,
+            preview: activeStatus.preview,
+            fullContent: result ?? activeStatus.fullContent,
+            startTime: activeStatus.startTime,
+            endTime: endTime
+        )
     }
     
     mutating func setProviderSessionId(_ sessionId: String?) {

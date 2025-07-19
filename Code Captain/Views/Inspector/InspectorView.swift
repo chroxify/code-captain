@@ -22,7 +22,6 @@ struct InspectorView: View {
                         .frame(minHeight: 150)
                 }
             }
-            .background(.regularMaterial, in: Rectangle())
             .inspectorColumnWidth(min: 250, ideal: 300)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -49,7 +48,6 @@ struct InspectorView: View {
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .background(.regularMaterial, in: Rectangle())
             .inspectorColumnWidth(min: 250, ideal: 300, max: 450)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
