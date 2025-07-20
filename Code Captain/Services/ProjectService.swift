@@ -44,13 +44,13 @@ class ProjectService: ObservableObject {
         logger.debug("Creating project object", category: .project)
         var project = Project(name: name, path: path, providerType: providerType)
         
-        // Set up git worktree
-        logger.debug("Setting up git worktree for project", category: .project)
+        // Verify git repository and initialize Code Captain tracking
+        logger.debug("Initializing git repository for Code Captain", category: .project)
         do {
-            try await setupGitWorktree(for: &project)
-            logger.info("Successfully set up git worktree for project: \(name)", category: .project)
+            try await initializeCodeCaptainGitTracking(for: &project)
+            logger.info("Successfully initialized Code Captain git tracking for project: \(name)", category: .project)
         } catch {
-            logger.error("Failed to set up git worktree for project: \(name)", category: .project)
+            logger.error("Failed to initialize Code Captain git tracking for project: \(name)", category: .project)
             logger.logError(error, category: .project)
             throw error
         }
@@ -68,8 +68,8 @@ class ProjectService: ObservableObject {
     }
     
     func removeProject(_ project: Project) async throws {
-        // Clean up git worktree
-        try await cleanupGitWorktree(for: project)
+        // Clean up Code Captain git branches and tracking
+        try await cleanupCodeCaptainGitTracking(for: project)
         
         // Remove from projects list on main thread
         await MainActor.run {
@@ -87,14 +87,13 @@ class ProjectService: ObservableObject {
         }
     }
     
-    // MARK: - Git Worktree Management
+    // MARK: - Code Captain Git Management
     
-    private func setupGitWorktree(for project: inout Project) async throws {
+    private func initializeCodeCaptainGitTracking(for project: inout Project) async throws {
         logger.logFunctionEntry(category: .git)
         let projectPath = project.path
-        let worktreePath = project.gitWorktreePath
         
-        logger.debug("Setting up git worktree - Project: \(projectPath.path), Worktree: \(worktreePath.path)", category: .git)
+        logger.debug("Initializing Code Captain git tracking in project: \(projectPath.path)", category: .git)
         
         // Check if the project is a git repository
         let gitPath = projectPath.appendingPathComponent(".git")
@@ -104,78 +103,26 @@ class ProjectService: ObservableObject {
             throw ProjectError.notAGitRepository
         }
         
-        // Remove existing worktree if it exists
-        if fileManager.fileExists(atPath: worktreePath.path) {
-            logger.warning("Existing worktree found, removing: \(worktreePath.path)", category: .git)
-            try await removeGitWorktree(at: worktreePath, from: projectPath)
+        // Store current branch for restoration later if needed
+        let currentBranch = try await getCurrentBranch(in: projectPath)
+        logger.debug("Current branch: \(currentBranch)", category: .git)
+        
+        // Create CodeCaptain directory for metadata (not a worktree)
+        let codeCaptainDir = projectPath.appendingPathComponent("CodeCaptain")
+        if !fileManager.fileExists(atPath: codeCaptainDir.path) {
+            try fileManager.createDirectory(at: codeCaptainDir, withIntermediateDirectories: true)
+            logger.debug("Created CodeCaptain metadata directory", category: .git)
         }
         
-        // Create new worktree
-        logger.debug("Creating new git worktree", category: .git)
-        try await createGitWorktree(at: worktreePath, from: projectPath)
-        
-        // Verify worktree was created successfully
-        guard fileManager.fileExists(atPath: worktreePath.path) else {
-            logger.error("Worktree creation failed - directory does not exist: \(worktreePath.path)", category: .git)
-            throw ProjectError.worktreeCreationFailed
-        }
-        
-        logger.info("Successfully set up git worktree: \(worktreePath.path)", category: .git)
+        logger.info("Successfully initialized Code Captain git tracking: \(projectPath.path)", category: .git)
         logger.logFunctionExit(category: .git)
     }
     
-    private func createGitWorktree(at worktreePath: URL, from projectPath: URL) async throws {
-        logger.logFunctionEntry(category: .git)
-        logger.debug("Creating git worktree at: \(worktreePath.path) from: \(projectPath.path)", category: .git)
-        
+    /// Get the current git branch
+    private func getCurrentBranch(in projectPath: URL) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "worktree", "add", worktreePath.path, "HEAD"]
-        process.currentDirectoryURL = projectPath
-        
-        logger.debug("Git command: \(process.executableURL?.path ?? "unknown") \(process.arguments?.joined(separator: " ") ?? "")", category: .git)
-        logger.debug("Working directory: \(projectPath.path)", category: .git)
-        
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-        
-        do {
-            logger.debug("Executing git worktree add command", category: .git)
-            try process.run()
-            process.waitUntilExit()
-            
-            logger.debug("Git command completed with status: \(process.terminationStatus)", category: .git)
-            
-            // Log output
-            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let outputString = String(data: outputData, encoding: .utf8) ?? ""
-            if !outputString.isEmpty {
-                logger.debug("Git output: \(outputString)", category: .git)
-            }
-            
-            if process.terminationStatus != 0 {
-                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-                logger.error("Git command failed with status \(process.terminationStatus): \(errorString)", category: .git)
-                throw ProjectError.gitCommandFailed(errorString)
-            }
-            
-            logger.info("Successfully created git worktree at: \(worktreePath.path)", category: .git)
-        } catch {
-            logger.error("Failed to execute git worktree command", category: .git)
-            logger.logError(error, category: .git)
-            throw error
-        }
-        
-        logger.logFunctionExit(category: .git)
-    }
-    
-    private func removeGitWorktree(at worktreePath: URL, from projectPath: URL) async throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git", "worktree", "remove", worktreePath.path, "--force"]
+        process.arguments = ["git", "branch", "--show-current"]
         process.currentDirectoryURL = projectPath
         
         let outputPipe = Pipe()
@@ -186,23 +133,79 @@ class ProjectService: ObservableObject {
         try process.run()
         process.waitUntilExit()
         
-        // Note: We don't throw error here as the worktree might not exist
-        // This is expected behavior during cleanup
+        if process.terminationStatus != 0 {
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            throw ProjectError.gitCommandFailed(errorString)
+        }
+        
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let branchName = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "main"
+        
+        return branchName.isEmpty ? "main" : branchName
     }
     
-    private func cleanupGitWorktree(for project: Project) async throws {
-        let worktreePath = project.gitWorktreePath
+    /// Clean up Code Captain branches and tracking
+    private func cleanupCodeCaptainGitTracking(for project: Project) async throws {
         let projectPath = project.path
         
-        if fileManager.fileExists(atPath: worktreePath.path) {
-            try await removeGitWorktree(at: worktreePath, from: projectPath)
+        // List all Code Captain session branches
+        let branches = try await listCodeCaptainBranches(in: projectPath)
+        
+        // Delete each Code Captain branch
+        for branch in branches {
+            try await deleteBranch(name: branch, in: projectPath)
         }
+        
+        // Remove CodeCaptain metadata directory
+        let codeCaptainDir = projectPath.appendingPathComponent("CodeCaptain")
+        if fileManager.fileExists(atPath: codeCaptainDir.path) {
+            try fileManager.removeItem(at: codeCaptainDir)
+        }
+    }
+    
+    /// List all Code Captain session branches
+    private func listCodeCaptainBranches(in projectPath: URL) async throws -> [String] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git", "branch", "--list", "codecaptain/*"]
+        process.currentDirectoryURL = projectPath
+        
+        let outputPipe = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(data: outputData, encoding: .utf8) ?? ""
+        
+        return output.components(separatedBy: .newlines)
+            .compactMap { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.hasPrefix("* ") {
+                    return String(trimmed.dropFirst(2))
+                } else if trimmed.hasPrefix("  ") {
+                    return String(trimmed.dropFirst(2))
+                }
+                return trimmed.isEmpty ? nil : trimmed
+            }
+    }
+    
+    /// Delete a git branch
+    private func deleteBranch(name: String, in projectPath: URL) async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["git", "branch", "-D", name]
+        process.currentDirectoryURL = projectPath
+        
+        try process.run()
+        process.waitUntilExit()
+        // Don't throw error if branch doesn't exist
     }
     
     // MARK: - Branch Management
     
     func createBranch(name: String, for project: Project) async throws -> String {
-        let worktreePath = project.gitWorktreePath
+        let projectPath = project.gitWorktreePath  // This is now the same as project.path
         
         // Sanitize the session name to be git-safe
         let sanitizedName = name.lowercased()
@@ -223,12 +226,16 @@ class ProjectService: ObservableObject {
             .replacingOccurrences(of: ".", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         
-        let branchName = "session-\(UUID().uuidString.prefix(8))-\(sanitizedName)"
+        // Use CodeCaptain namespace for branches: codecaptain/session-id
+        let sessionId = UUID().uuidString.prefix(8)
+        let branchName = "codecaptain/\(sessionId)"
+        
+        logger.debug("Creating Code Captain branch: \(branchName) for session: \(name)", category: .git)
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["git", "checkout", "-b", branchName]
-        process.currentDirectoryURL = worktreePath
+        process.currentDirectoryURL = projectPath
         
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -241,19 +248,23 @@ class ProjectService: ObservableObject {
         if process.terminationStatus != 0 {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            logger.error("Failed to create branch \(branchName): \(errorString)", category: .git)
             throw ProjectError.gitCommandFailed(errorString)
         }
         
+        logger.info("Successfully created Code Captain branch: \(branchName)", category: .git)
         return branchName
     }
     
     func switchToBranch(name: String, for project: Project) async throws {
-        let worktreePath = project.gitWorktreePath
+        let projectPath = project.gitWorktreePath  // This is now the same as project.path
+        
+        logger.debug("Switching to Code Captain branch: \(name)", category: .git)
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["git", "checkout", name]
-        process.currentDirectoryURL = worktreePath
+        process.currentDirectoryURL = projectPath
         
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -266,8 +277,11 @@ class ProjectService: ObservableObject {
         if process.terminationStatus != 0 {
             let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
             let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+            logger.error("Failed to switch to branch \(name): \(errorString)", category: .git)
             throw ProjectError.gitCommandFailed(errorString)
         }
+        
+        logger.info("Successfully switched to Code Captain branch: \(name)", category: .git)
     }
     
     // MARK: - Persistence

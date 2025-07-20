@@ -40,6 +40,8 @@ enum LogCategory: String, CaseIterable, Codable {
     case communication = "COMMUNICATION"
     case process = "PROCESS"
     case storage = "STORAGE"
+    case checkpoint = "CHECKPOINT"
+    case fileTracking = "FILE_TRACKING"
     
     var osLog: OSLog {
         return OSLog(subsystem: Bundle.main.bundleIdentifier ?? "CodeCaptain", category: self.rawValue)
@@ -60,6 +62,8 @@ class Logger {
     var logToConsole = true
     var logToDisk = true
     var minimumLogLevel: LogLevel = .debug
+    
+    // Test comment for checkpoint system verification
     
     private init() {
         dateFormatter = DateFormatter()

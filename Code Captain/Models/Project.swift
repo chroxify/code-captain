@@ -15,7 +15,8 @@ struct Project: Identifiable, Codable, Hashable {
         self.id = UUID()
         self.name = name
         self.path = path
-        self.gitWorktreePath = path.appendingPathComponent("CodeCaptain/workspace")
+        // Use the project directory directly - no separate workspace directory
+        self.gitWorktreePath = path
         self.providerType = providerType
         self.createdAt = Date()
         self.lastAccessedAt = Date()

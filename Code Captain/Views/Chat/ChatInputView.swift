@@ -165,7 +165,7 @@ struct ChatInputView: View {
                             Spacer()
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.black)
+                                .foregroundStyle(Color(NSColor.controlBackgroundColor))
                             Spacer()
                         }
                         .opacity(canSendMessage ? 1 : 0.5)

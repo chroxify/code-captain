@@ -384,6 +384,98 @@ class CodeCaptainStore: ObservableObject {
         }
     }
     
+    // MARK: - Legacy Checkpoint Management (Deprecated)
+    
+    func getCheckpoints(for session: Session) -> [Checkpoint] {
+        // Legacy checkpoint support - return empty array
+        return []
+    }
+    
+    func getCheckpoint(for messageId: UUID) -> Checkpoint? {
+        // Legacy checkpoint support - return nil
+        return nil
+    }
+    
+    func rollbackToCheckpoint(_ checkpoint: Checkpoint) async {
+        // Legacy checkpoint support - no-op
+        error = "Legacy checkpoint system is deprecated. Use file state rollback instead."
+    }
+    
+    func rollbackToCheckpointSelectively(_ checkpoint: Checkpoint, preservingOtherSessions otherSessionIds: [UUID]) async {
+        // Legacy checkpoint support - no-op
+        error = "Legacy checkpoint system is deprecated. Use file state rollback instead."
+    }
+    
+    // MARK: - File State Management
+    
+    func hasFileChanges(for session: Session) -> Bool {
+        return sessionService.hasFileChanges(for: session)
+    }
+    
+    func getFileChangesSummary(for session: Session) -> SessionFileChangesSummary? {
+        return sessionService.getFileChangesSummary(for: session)
+    }
+    
+    func messageHasFileChanges(messageId: UUID, sessionId: UUID) -> Bool {
+        return sessionService.messageHasFileChanges(messageId: messageId, sessionId: sessionId)
+    }
+    
+    func getMessageFileChangesSummary(messageId: UUID, sessionId: UUID) -> MessageFileChangesSummary? {
+        return sessionService.getMessageFileChangesSummary(messageId: messageId, sessionId: sessionId)
+    }
+    
+    /// Get count of checkpoints that would be rolled back
+    func getCheckpointRollbackCount(targetMessageId: UUID, session: Session) -> Int {
+        return sessionService.getCheckpointRollbackCount(targetMessageId: targetMessageId, session: session)
+    }
+    
+    func rollbackMessage(messageId: UUID, session: Session) async {
+        error = nil
+        
+        do {
+            try await sessionService.rollbackMessage(messageId: messageId, session: session)
+            // Force UI refresh by triggering objectWillChange
+            await MainActor.run {
+                objectWillChange.send()
+            }
+            logger.info("Rollback completed for message \(messageId) in session \(session.id)", category: .fileTracking)
+        } catch {
+            self.error = error.localizedDescription
+            logger.error("Rollback failed for message \(messageId): \(error)", category: .fileTracking)
+        }
+    }
+    
+    func rollbackToMessage(targetMessageId: UUID, session: Session) async {
+        error = nil
+        
+        do {
+            try await sessionService.rollbackToMessage(targetMessageId: targetMessageId, session: session)
+            // Force UI refresh by triggering objectWillChange
+            await MainActor.run {
+                objectWillChange.send()
+            }
+            logger.info("Rollback completed to message \(targetMessageId) in session \(session.id)", category: .fileTracking)
+        } catch {
+            self.error = error.localizedDescription
+            logger.error("Rollback to message \(targetMessageId) failed: \(error)", category: .fileTracking)
+        }
+    }
+    
+    func previewMessageRollback(messageId: UUID, sessionId: UUID) -> MessageRollbackPreview? {
+        return sessionService.previewMessageRollback(messageId: messageId, sessionId: sessionId)
+    }
+    
+    func previewRollback(toCheckpoint checkpoint: Checkpoint, excludingOtherSessions otherSessionIds: [UUID] = []) -> RollbackPreview {
+        // Legacy checkpoint support - create a dummy preview with the provided checkpoint
+        return RollbackPreview(
+            targetCheckpoint: checkpoint,
+            affectedCheckpoints: [],
+            filesToRevert: [],
+            conflictingFiles: [],
+            protectedCheckpoints: []
+        )
+    }
+    
     // MARK: - Cleanup
     
     func cleanup() async {

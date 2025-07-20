@@ -34,7 +34,7 @@ struct ChatView: View {
                                 VStack(spacing: 0) {
                                     LazyVStack(spacing: 16) {
                                         ForEach(session.messages) { message in
-                                            MessageBubbleView(message: message)
+                                            MessageBubbleView(message: message, sessionMessages: session.messages, store: store)
                                                 .id(message.id)
                                         }
                                     }

@@ -13,11 +13,15 @@ struct InspectorView: View {
                 
                 // Main content area
                 VSplitView {
-                    // Top section: TODOs (50%)
+                    // Top section: File Changes Overview
+                    FileChangesOverviewView(store: store, session: session)
+                        .frame(minHeight: 120)
+                    
+                    // Middle section: TODOs
                     TodoSectionView(session: session)
                         .frame(minHeight: 150)
                     
-                    // Bottom section: Terminal (50%)
+                    // Bottom section: Terminal
                     SwiftTerminalSectionView(session: session, store: store)
                         .frame(minHeight: 150)
                 }

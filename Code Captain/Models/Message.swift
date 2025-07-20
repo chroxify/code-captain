@@ -867,6 +867,61 @@ struct Message: Identifiable, Codable, Hashable {
         
         return toolStatuses.first { $0.id == uniqueId }
     }
+    
+    // MARK: - Checkpoint Methods (Legacy Support)
+    
+    /// Check if this message has an associated checkpoint (legacy support - deprecated)
+    var hasCheckpoint: Bool {
+        return metadata?.checkpointId != nil
+    }
+    
+    /// Check if this message has file state available for rollback
+    var hasFileState: Bool {
+        return metadata?.hasFileState == true
+    }
+    
+    /// Get the checkpoint ID for this message (legacy support)
+    var checkpointId: UUID? {
+        return metadata?.checkpointId
+    }
+    
+    /// Get file operations for this message
+    var fileOperations: [CheckpointFileOperation] {
+        return metadata?.fileOperations ?? []
+    }
+    
+    /// Get list of modified file paths
+    var modifiedFilePaths: [String] {
+        return fileOperations.map { $0.filePath }
+    }
+    
+    /// Check if this message modified any files
+    var hasFileChanges: Bool {
+        return !fileOperations.isEmpty
+    }
+    
+    /// Count of files modified by this message
+    var fileChangeCount: Int {
+        return Set(fileOperations.map { $0.filePath }).count
+    }
+    
+    /// Set checkpoint information for this message (legacy support)
+    mutating func setCheckpoint(id: UUID, fileOperations: [CheckpointFileOperation]) {
+        if metadata == nil {
+            metadata = MessageMetadata()
+        }
+        metadata?.checkpointId = id
+        metadata?.fileOperations = fileOperations
+        metadata?.filesChanged = Array(Set(fileOperations.map { $0.filePath }))
+    }
+    
+    /// Set file state availability for this message
+    mutating func setFileStateAvailable(_ available: Bool) {
+        if metadata == nil {
+            metadata = MessageMetadata()
+        }
+        metadata?.hasFileState = available
+    }
 }
 
 enum MessageRole: String, CaseIterable, Codable, Hashable {
@@ -889,13 +944,19 @@ struct MessageMetadata: Codable, Hashable {
     var toolsUsed: [String]?
     var processingTime: TimeInterval?
     var errorInfo: String?
+    var checkpointId: UUID?
+    var fileOperations: [CheckpointFileOperation]?
+    var hasFileState: Bool?
     
-    init(filesChanged: [String]? = nil, gitOperations: [String]? = nil, toolsUsed: [String]? = nil, processingTime: TimeInterval? = nil, errorInfo: String? = nil) {
+    init(filesChanged: [String]? = nil, gitOperations: [String]? = nil, toolsUsed: [String]? = nil, processingTime: TimeInterval? = nil, errorInfo: String? = nil, checkpointId: UUID? = nil, fileOperations: [CheckpointFileOperation]? = nil, hasFileState: Bool? = nil) {
         self.filesChanged = filesChanged
         self.gitOperations = gitOperations
         self.toolsUsed = toolsUsed
         self.processingTime = processingTime
         self.errorInfo = errorInfo
+        self.checkpointId = checkpointId
+        self.fileOperations = fileOperations
+        self.hasFileState = hasFileState
     }
 }
 

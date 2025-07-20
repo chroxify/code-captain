@@ -6,6 +6,7 @@ class SessionService: ObservableObject {
     
     private let projectService: ProjectService
     private let providerService: ProviderService
+    private let enhancedFileTracker: EnhancedFileTracker
     private var cancellables = Set<AnyCancellable>()
     private let instanceId = UUID()
     private let logger = Logger.shared
@@ -13,6 +14,7 @@ class SessionService: ObservableObject {
     init(projectService: ProjectService) {
         self.projectService = projectService
         self.providerService = ProviderService()
+        self.enhancedFileTracker = EnhancedFileTracker()
         logger.debug("SessionService instance created with ID: \(instanceId)", category: .session)
         loadSessions()
     }
@@ -137,6 +139,9 @@ class SessionService: ObservableObject {
             
             // Extract todos from messages (provider-agnostic)
             await extractTodosFromMessages(for: &updatedSession)
+            
+            // Track file operations for rollback capability
+            await trackFileOperationsFromMessages(for: &updatedSession, project: project)
             
             // Always update session ID from response (this is critical for session continuity)
             if let newSessionId = response.sessionId, !newSessionId.isEmpty {
@@ -305,8 +310,15 @@ class SessionService: ObservableObject {
                     
                     var message = Message(from: sdkMessage, sessionId: session.id)
                     
+                    // ENHANCED FILE TRACKING: Process tool use and tool result with dual-hook system
+                    await processFileTrackingHooks(sdkMessage: sdkMessage, messageId: message.id, projectPath: project.gitWorktreePath)
+                    
                     // Process tool statuses for this specific message
                     message.processToolStatuses()
+                    
+                    // Mark message with file operations immediately for real-time UI updates
+                    let hasFileOps = enhancedFileTracker.hasFileOperations(messageId: message.id)
+                    message.setFileStateAvailable(hasFileOps)
                     
                     updatedSession.addMessage(message)
                     
@@ -330,6 +342,10 @@ class SessionService: ObservableObject {
                     // Yield the message immediately
                     continuation.yield(message)
                 }
+                
+                // File tracking is now handled in real-time during streaming
+                // Mark messages with file operations for UI display
+                await markMessagesWithFileOperations(for: &updatedSession)
                 
                 // Update session to ready for review state when streaming completes
                 updatedSession.updateState(.readyForReview)
@@ -574,6 +590,217 @@ class SessionService: ObservableObject {
     func cleanup() async {
         // Sessions are conceptually always active, no need to stop them
         // Just clean up any resources
+    }
+    
+    // MARK: - Enhanced File Tracking
+    
+    /// Process file tracking hooks for both tool use and tool result detection
+    private func processFileTrackingHooks(sdkMessage: SDKMessage, messageId: UUID, projectPath: URL) async {
+        switch sdkMessage {
+        case .assistant(let assistantMsg):
+            // Hook 1: Pre-capture on tool use detection
+            for contentBlock in assistantMsg.message.content {
+                if case .toolUse(let toolUse) = contentBlock {
+                    await enhancedFileTracker.processToolUse(
+                        toolUse,
+                        messageId: messageId,
+                        projectPath: projectPath
+                    )
+                }
+            }
+        case .user(let userMsg):
+            // Hook 2: Post-capture on tool result detection (for file creation only)
+            switch userMsg.message.content {
+            case .blocks(let contentBlocks):
+                for block in contentBlocks {
+                    if block.type == "tool_result" {
+                        // Simple tool result processing for file creation
+                        if let toolUseId = block.tool_use_id {
+                            let toolResult = ToolResultBlock(
+                                tool_use_id: toolUseId,
+                                content: block.content,
+                                is_error: block.is_error ?? false
+                            )
+                            await enhancedFileTracker.processToolResult(
+                                toolResult,
+                                messageId: messageId,
+                                projectPath: projectPath
+                            )
+                        }
+                    }
+                }
+            case .text(_):
+                break
+            }
+        default:
+            break
+        }
+    }
+    
+    /// Mark messages that have file operations for UI display
+    private func markMessagesWithFileOperations(for session: inout Session) async {
+        for i in 0..<session.messages.count {
+            let hasFileOps = enhancedFileTracker.hasFileOperations(messageId: session.messages[i].id)
+            session.messages[i].setFileStateAvailable(hasFileOps)
+        }
+        
+        await updateSession(session)
+        logger.debug("Marked messages with file operations in session \(session.id)", category: .fileTracking)
+    }
+    
+    // TODO: Implement proper tool result parsing when needed
+    
+    // MARK: - File State Queries
+    
+    
+    /// Check if session has file changes that can be rolled back
+    func hasFileChanges(for session: Session) -> Bool {
+        let messageIds = session.messages.map { $0.id }
+        let summary = enhancedFileTracker.getFileChangesSummary(forMessages: messageIds)
+        return summary.hasChanges
+    }
+    
+    /// Track file operations from messages for rollback capability (legacy method for compatibility)
+    private func trackFileOperationsFromMessages(for session: inout Session, project: Project) async {
+        // File tracking is now handled by the EnhancedFileTracker dual-hook system in real-time
+        // This method is kept for compatibility but does minimal work
+        await markMessagesWithFileOperations(for: &session)
+        logger.debug("Legacy file operation tracking completed for session \(session.id)", category: .fileTracking)
+    }
+    
+    /// Get comprehensive file changes summary for a session
+    func getFileChangesSummary(for session: Session) -> SessionFileChangesSummary? {
+        let messageIds = session.messages.map { $0.id }
+        let summary = enhancedFileTracker.getFileChangesSummary(forMessages: messageIds)
+        return SessionFileChangesSummary(
+            modifiedFiles: summary.modifiedFiles,
+            createdFiles: summary.createdFiles,
+            deletedFiles: summary.deletedFiles,
+            renamedFiles: summary.movedFiles,
+            totalOperations: summary.totalOperations,
+            messageCount: summary.messageCount
+        )
+    }
+    
+    /// Check if a specific message has file changes that can be rolled back
+    func messageHasFileChanges(messageId: UUID, sessionId: UUID) -> Bool {
+        return enhancedFileTracker.hasFileOperations(messageId: messageId)
+    }
+    
+    /// Get file changes summary for a specific message
+    func getMessageFileChangesSummary(messageId: UUID, sessionId: UUID) -> MessageFileChangesSummary? {
+        // For now, return a simplified summary since the new system doesn't track per-message details
+        // This could be implemented if needed for the UI
+        if enhancedFileTracker.hasFileOperations(messageId: messageId) {
+            return MessageFileChangesSummary(
+                affectedFiles: [], // Would need to implement in EnhancedFileTracker if needed
+                operationCounts: [:],
+                totalOperations: 1 // Simplified
+            )
+        }
+        return nil
+    }
+    
+    /// Rollback changes from a specific message (checkpoint-based rollback)
+    func rollbackMessage(messageId: UUID, session: Session) async throws {
+        guard let project = await getProject(for: session.projectId) else {
+            throw SessionError.projectNotFound
+        }
+        
+        // Find target message index
+        guard let targetIndex = session.messages.firstIndex(where: { $0.id == messageId }) else {
+            throw SessionError.projectNotFound // Reuse existing error
+        }
+        
+        // Get all messages from target onwards that have file operations
+        let messagesToRollback = Array(session.messages[targetIndex...])
+            .reversed() // Start from latest and work backwards
+            .filter { enhancedFileTracker.hasFileOperations(messageId: $0.id) }
+        
+        if messagesToRollback.isEmpty {
+            logger.debug("No file operations to rollback for message \(messageId)", category: .fileTracking)
+            return
+        }
+        
+        logger.info("🔄 Starting checkpoint rollback to message \(messageId) - rolling back \(messagesToRollback.count) checkpoints", category: .fileTracking)
+        
+        // Atomic checkpoint rollback - all at once
+        try await enhancedFileTracker.rollbackToCheckpoint(
+            targetMessageId: messageId,
+            messagesToRollback: messagesToRollback.map { $0.id },
+            projectPath: project.gitWorktreePath
+        )
+        
+        // Clear file state availability on all rolled back messages
+        await clearFileStateFromRolledBackMessages(messagesToRollback, session: session)
+        
+        logger.info("✅ Checkpoint rollback completed - restored to state at message \(messageId)", category: .fileTracking)
+    }
+    
+    /// Get count of checkpoints that would be rolled back
+    func getCheckpointRollbackCount(targetMessageId: UUID, session: Session) -> Int {
+        guard let targetIndex = session.messages.firstIndex(where: { $0.id == targetMessageId }) else {
+            return 0
+        }
+        
+        // Count messages from target onwards that have file operations
+        return Array(session.messages[targetIndex...])
+            .filter { enhancedFileTracker.hasFileOperations(messageId: $0.id) }
+            .count
+    }
+    
+    /// Rollback all changes from session up to a specific message (legacy method - now uses checkpoint rollback)
+    func rollbackToMessage(targetMessageId: UUID, session: Session) async throws {
+        // Use the new checkpoint-based rollback system
+        try await rollbackMessage(messageId: targetMessageId, session: session)
+    }
+    
+    /// Preview what would be rolled back for a message
+    func previewMessageRollback(messageId: UUID, sessionId: UUID) -> MessageRollbackPreview? {
+        // Enhanced file tracker handles rollback internally - preview not needed for new system
+        return nil
+    }
+    
+    /// Clear file state availability from a specific message
+    private func clearFileStateFromMessage(messageId: UUID, session: Session) async {
+        var updatedSession = session
+        
+        if let messageIndex = updatedSession.messages.firstIndex(where: { $0.id == messageId }) {
+            updatedSession.messages[messageIndex].setFileStateAvailable(false)
+            await updateSession(updatedSession)
+            logger.debug("Cleared file state availability from message \(messageId)", category: .fileTracking)
+        }
+    }
+    
+    /// Clear file state availability from all messages in a session
+    private func clearFileStateFromMessages(_ session: Session) async {
+        var updatedSession = session
+        
+        for i in 0..<updatedSession.messages.count {
+            updatedSession.messages[i].setFileStateAvailable(false)
+        }
+        
+        await updateSession(updatedSession)
+        logger.debug("Cleared file state availability from messages in session \(session.id)", category: .fileTracking)
+    }
+    
+    /// Clear file state availability from specific rolled back messages
+    private func clearFileStateFromRolledBackMessages(_ messages: [Message], session: Session) async {
+        var updatedSession = session
+        
+        let rolledBackMessageIds = Set(messages.map { $0.id })
+        for i in 0..<updatedSession.messages.count {
+            if rolledBackMessageIds.contains(updatedSession.messages[i].id) {
+                updatedSession.messages[i].setFileStateAvailable(false)
+            }
+        }
+        
+        await updateSession(updatedSession)
+        logger.debug("Cleared file state availability from \(messages.count) rolled back messages", category: .fileTracking)
+    }
+    
+    private func getProject(for projectId: UUID) async -> Project? {
+        return await projectService.projects.first { $0.id == projectId }
     }
 }
 
