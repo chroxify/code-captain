@@ -1,19 +1,23 @@
-import SwiftUI
 import MarkdownUI
+import SwiftUI
 
 struct MessageBubbleView: View {
     let message: Message
-    let sessionMessages: [Message] // Pass the session messages to find next checkpoint
-    let store: CodeCaptainStore // Pass the store for checkpoint operations
+    let sessionMessages: [Message]  // Pass the session messages to find next checkpoint
+    let store: CodeCaptainStore  // Pass the store for checkpoint operations
     private let logger = Logger.shared
-    
+
     // Find the next AI message with file state after this user message
     private var nextFileStateMessage: Message? {
         guard message.role == .user else { return nil }
-        
+
         // Find current message index
-        guard let currentIndex = sessionMessages.firstIndex(where: { $0.id == message.id }) else { return nil }
-        
+        guard
+            let currentIndex = sessionMessages.firstIndex(where: {
+                $0.id == message.id
+            })
+        else { return nil }
+
         // Look for the next assistant message with file state
         for index in (currentIndex + 1)..<sessionMessages.count {
             let nextMessage = sessionMessages[index]
@@ -21,17 +25,20 @@ struct MessageBubbleView: View {
                 return nextMessage
             }
         }
-        
+
         return nil
     }
-    
+
     // Convert Markdown headings to bold text
     private func convertHeadingsToBold(_ text: String) -> String {
         // Convert # ## ### #### ##### ###### headings to bold
         let pattern = "^(#{1,6})\\s+(.+)$"
-        let regex = try! NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines])
+        let regex = try! NSRegularExpression(
+            pattern: pattern,
+            options: [.anchorsMatchLines]
+        )
         let range = NSRange(location: 0, length: text.utf16.count)
-        
+
         return regex.stringByReplacingMatches(
             in: text,
             options: [],
@@ -39,19 +46,20 @@ struct MessageBubbleView: View {
             withTemplate: "**$2**"
         )
     }
-    
+
     // Check if message has any visible content
     private var hasVisibleContent: Bool {
         if message.hasRichContent {
             // Check if RichMessageView would render anything
             guard let sdkMessage = message.sdkMessage else { return false }
-            
+
             switch sdkMessage {
             case .assistant(let assistantMsg):
                 return assistantMsg.message.content.contains { contentBlock in
                     switch contentBlock {
                     case .thinking(_), .toolUse(_):
-                        return message.getToolStatus(for: contentBlock, at: 0) != nil
+                        return message.getToolStatus(for: contentBlock, at: 0)
+                            != nil
                     case .text(_):
                         return true
                     default:
@@ -64,13 +72,14 @@ struct MessageBubbleView: View {
                     return !text.isEmpty
                 case .blocks(let blocks):
                     return blocks.contains { block in
-                        block.type != "tool_result" && block.content?.isEmpty == false
+                        block.type != "tool_result"
+                            && block.content?.isEmpty == false
                     }
                 }
             case .system(_):
-                return false // Hide system messages (init messages)
+                return false  // Hide system messages (init messages)
             case .result(_):
-                return false // Hide result messages (session completion)
+                return false  // Hide result messages (session completion)
             }
         } else {
             return !message.displayContent.isEmpty
@@ -106,18 +115,27 @@ struct MessageBubbleView: View {
                 }
 
                 // Metadata
-                if let metadata = message.metadata {
-                    MessageMetadataView(metadata: metadata)
-                }
-                
+                //                if let metadata = message.metadata {
+                //                    MessageMetadataView(metadata: metadata)
+                //                }
+
                 // File state reset button (only visible when there are actual file changes to reset)
-                if message.role == .user, 
-                   let fileStateMessage = nextFileStateMessage,
-                   let session = store.sessions.first(where: { $0.id == fileStateMessage.sessionId }),
-                   store.messageHasFileChanges(messageId: fileStateMessage.id, sessionId: session.id) {
+                if message.role == .user,
+                    let fileStateMessage = nextFileStateMessage,
+                    let session = store.sessions.first(where: {
+                        $0.id == fileStateMessage.sessionId
+                    }),
+                    store.messageHasFileChanges(
+                        messageId: fileStateMessage.id,
+                        sessionId: session.id
+                    )
+                {
                     HStack {
                         Spacer()
-                        FileStateResetButton(message: fileStateMessage, store: store)
+                        FileStateResetButton(
+                            message: fileStateMessage,
+                            store: store
+                        )
                     }
                 }
             }
@@ -132,42 +150,40 @@ struct FileStateResetButton: View {
     let store: CodeCaptainStore
     @State private var showingResetConfirmation = false
     @State private var isResetting = false
-    
+
     private var session: Session? {
         store.sessions.first { $0.id == message.sessionId }
     }
-    
+
     private var hasFileChanges: Bool {
         guard let session = session else { return false }
         // Check if THIS MESSAGE specifically has file changes that can be rolled back
-        return store.messageHasFileChanges(messageId: message.id, sessionId: session.id)
+        return store.messageHasFileChanges(
+            messageId: message.id,
+            sessionId: session.id
+        )
     }
-    
+
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-            
-            Button(action: {
-                showingResetConfirmation = true
-            }) {
-                Text("Reset")
+        GhostButton(action: {
+            showingResetConfirmation = true
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
                     .font(.caption2)
-                    .foregroundColor(hasFileChanges && !isResetting ? .blue : .secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(!hasFileChanges || isResetting)
-            
-            if isResetting {
-                ProgressView()
-                    .scaleEffect(0.5)
+                    .foregroundColor(.secondary)
+
+                Text("Restore Checkpoint")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                if isResetting {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.gray.opacity(0.08))
-        .cornerRadius(6)
+        .disabled(!hasFileChanges || isResetting)
         .confirmationDialog(
             "Reset File Changes",
             isPresented: $showingResetConfirmation,
@@ -178,45 +194,57 @@ struct FileStateResetButton: View {
                     await performReset()
                 }
             }
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {}
         } message: {
             VStack(alignment: .leading, spacing: 4) {
-                Text("This will undo all file changes made by the AI after this message.")
-                
+                Text(
+                    "This will undo all file changes made by the AI after this message."
+                )
+
                 if let session = session {
-                    let changeCount = store.getMessageRollbackCount(targetMessageId: message.id, session: session)
+                    let changeCount = store.getMessageRollbackCount(
+                        targetMessageId: message.id,
+                        session: session
+                    )
                     if changeCount > 1 {
-                        Text("⚠️ This will reset \(changeCount) file changes back to this message.")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                        Text(
+                            "⚠️ This will reset \(changeCount) file changes back to this message."
+                        )
+                        .font(.caption)
+                        .foregroundColor(.orange)
                     } else {
-                        Text("This will reset file changes from this message only.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        Text(
+                            "This will reset file changes from this message only."
+                        )
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     }
                 }
             }
         }
     }
-    
+
     private func performReset() async {
         guard let session = session else { return }
-        
+
         isResetting = true
-        
+
         do {
             // Perform rollback of file changes for this specific message
             await store.rollbackMessage(messageId: message.id, session: session)
-            
+
             // Show success feedback
             // TODO: Add success notification
-            
+
         } catch {
             // Show error feedback
-            Logger.shared.error("Failed to reset file changes: \(error)", category: .fileTracking)
+            Logger.shared.error(
+                "Failed to reset file changes: \(error)",
+                category: .fileTracking
+            )
             // TODO: Add error notification
         }
-        
+
         isResetting = false
     }
 }

@@ -128,8 +128,6 @@ struct FileChangesOverviewView: View {
             }
         }
         .padding(12)
-        .background(Color(.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 

@@ -35,18 +35,28 @@ struct SwiftTerminalSectionView: View {
     @StateObject private var terminalService = SwiftTerminalService()
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
+        VStack(alignment: .leading, spacing: 12) {
+            // Header (similar to FileChangesOverviewView)
             HStack {
+                Image(systemName: "terminal")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                
                 Text("Terminal")
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                
                 Spacer()
                 
                 if let session = session {
-                    Text("Session: \(session.providerSessionId?.prefix(8) ?? "None")")
-                        .font(.caption)
+                    Text(session.providerSessionId?.prefix(8) ?? "None")
+                        .font(.caption2)
                         .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
                 }
                 
                 // Status indicator
@@ -54,10 +64,7 @@ struct SwiftTerminalSectionView: View {
                     .fill(terminalService.isRunning ? Color.green : Color.gray)
                     .frame(width: 8, height: 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            
-            Divider()
+            .padding(.horizontal, 2)
             
             // Terminal content
             Group {
@@ -67,7 +74,6 @@ struct SwiftTerminalSectionView: View {
                         workingDirectory: project.gitWorktreePath,
                         terminalService: terminalService
                     )
-                    .background(Color.black)
                     .onTapGesture {
                         // Focus the terminal when clicked
                         DispatchQueue.main.async {
@@ -75,26 +81,26 @@ struct SwiftTerminalSectionView: View {
                         }
                     }
                 } else {
-                    VStack {
+                    VStack(spacing: 8) {
+                        Image(systemName: "terminal")
+                            .font(.title3)
+                            .foregroundColor(.secondary)
                         Text("No project selected")
-                            .foregroundColor(.secondary)
-                            .font(.subheadline)
-                        Text("Select a project to start terminal")
-                            .foregroundColor(.secondary)
                             .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Select a project to start terminal")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
         .onDisappear {
             terminalService.stopTerminal()
         }
+        .padding(12)
     }
 }
-
-// MARK: - Terminal Focus Helper
-
-// Note: SwiftTerm's LocalProcessTerminalView already handles focus management internally
-// We don't need to override methods since they're not open for overriding

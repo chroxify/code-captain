@@ -4,52 +4,55 @@ struct TodoSectionView: View {
     let session: Session?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
+        VStack(alignment: .leading, spacing: 12) {
+            // Header (similar to FileChangesOverviewView)
             HStack {
-                Text("TODOs")
-                    .font(.headline)
-                    .foregroundColor(.primary)
+                Image(systemName: "checklist")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
                 
-                if let session = session {
-                    Text("\(session.completedTodosCount)/\(session.totalTodosCount)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text("TODOs")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
                 
                 Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            
-            Divider()
-            
-            // Content
-            ScrollView {
-                if let session = session, !session.todos.isEmpty {
-                    LazyVStack(alignment: .leading, spacing: 8) {
-                        ForEach(session.todos) { todo in
-                            TodoItemView(todo: todo, session: session)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    VStack(alignment: .center, spacing: 8) {
-                        Image(systemName: "checkmark.circle")
-                            .font(.system(size: 32))
-                            .foregroundColor(.secondary)
-                        Text("No TODOs")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text("TODOs will be extracted from agent responses")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
+                
+                if let session = session, session.totalTodosCount > 0 {
+                    Text("\(session.completedTodosCount)/\(session.totalTodosCount)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Capsule())
                 }
             }
+            .padding(.horizontal, 2)
+            
+            // Content
+            if let session = session, !session.todos.isEmpty {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(session.todos) { todo in
+                        TodoItemView(todo: todo, session: session)
+                    }
+                }
+            } else {
+                VStack(alignment: .center, spacing: 8) {
+                    Image(systemName: "checkmark.circle")
+                        .font(.title3)
+                        .foregroundColor(.green)
+                    Text("No TODOs")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("TODOs will be extracted from responses")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
+        .padding(12)
     }
 }
 
@@ -105,9 +108,7 @@ struct TodoItemView: View {
             
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .cornerRadius(6)
+        .padding(.vertical, 4)
     }
     
     private func priorityColor(_ priority: TodoPriority) -> Color {
