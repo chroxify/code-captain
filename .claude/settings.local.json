@@ -20,7 +20,8 @@
       "Bash(/Users/christo/.local/share/nvm/v20.18.1/bin/node /Users/christo/.bun/install/global/node_modules/@anthropic-ai/claude-code/cli.js -p --output-format json -r \"7ca42e0e-66c7-4558-b6ab-b961d25d29ba\" \"What project am I working on?\")",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:migueldeicaza.github.io)",
-      "Bash(swift:*)"
+      "Bash(swift:*)",
+      "Bash(git restore:*)"
     ],
     "deny": []
   }

@@ -310,7 +310,7 @@ class SessionService: ObservableObject {
                     
                     var message = Message(from: sdkMessage, sessionId: session.id)
                     
-                    // ENHANCED FILE TRACKING: Process tool use and tool result with dual-hook system
+                    // SIMPLE FILE TRACKING: Process tool use and tool result
                     await processFileTrackingHooks(sdkMessage: sdkMessage, messageId: message.id, projectPath: project.gitWorktreePath)
                     
                     // Process tool statuses for this specific message
@@ -592,13 +592,13 @@ class SessionService: ObservableObject {
         // Just clean up any resources
     }
     
-    // MARK: - Enhanced File Tracking
+    // MARK: - Simple File Tracking
     
-    /// Process file tracking hooks for both tool use and tool result detection
+    /// Process file tracking hooks for tool use and tool result detection
     private func processFileTrackingHooks(sdkMessage: SDKMessage, messageId: UUID, projectPath: URL) async {
         switch sdkMessage {
         case .assistant(let assistantMsg):
-            // Hook 1: Pre-capture on tool use detection
+            // Process tool use for file tracking
             for contentBlock in assistantMsg.message.content {
                 if case .toolUse(let toolUse) = contentBlock {
                     await enhancedFileTracker.processToolUse(
@@ -609,12 +609,12 @@ class SessionService: ObservableObject {
                 }
             }
         case .user(let userMsg):
-            // Hook 2: Post-capture on tool result detection (for file creation only)
+            // Process tool result for file tracking
             switch userMsg.message.content {
             case .blocks(let contentBlocks):
                 for block in contentBlocks {
                     if block.type == "tool_result" {
-                        // Simple tool result processing for file creation
+                        // Process tool result
                         if let toolUseId = block.tool_use_id {
                             let toolResult = ToolResultBlock(
                                 tool_use_id: toolUseId,
@@ -662,7 +662,7 @@ class SessionService: ObservableObject {
     
     /// Track file operations from messages for rollback capability (legacy method for compatibility)
     private func trackFileOperationsFromMessages(for session: inout Session, project: Project) async {
-        // File tracking is now handled by the EnhancedFileTracker dual-hook system in real-time
+        // File tracking is now handled by the SimpleFileTracker in real-time
         // This method is kept for compatibility but does minimal work
         await markMessagesWithFileOperations(for: &session)
         logger.debug("Legacy file operation tracking completed for session \(session.id)", category: .fileTracking)
@@ -722,9 +722,9 @@ class SessionService: ObservableObject {
             return
         }
         
-        logger.info("🔄 Starting checkpoint rollback to message \(messageId) - rolling back \(messagesToRollback.count) checkpoints", category: .fileTracking)
+        logger.info("🔄 Starting file rollback to message \(messageId) - rolling back \(messagesToRollback.count) messages", category: .fileTracking)
         
-        // Atomic checkpoint rollback - all at once
+        // Atomic file rollback - all at once
         try await enhancedFileTracker.rollbackToCheckpoint(
             targetMessageId: messageId,
             messagesToRollback: messagesToRollback.map { $0.id },
@@ -734,11 +734,11 @@ class SessionService: ObservableObject {
         // Clear file state availability on all rolled back messages
         await clearFileStateFromRolledBackMessages(messagesToRollback, session: session)
         
-        logger.info("✅ Checkpoint rollback completed - restored to state at message \(messageId)", category: .fileTracking)
+        logger.info("✅ File rollback completed - restored to state at message \(messageId)", category: .fileTracking)
     }
     
-    /// Get count of checkpoints that would be rolled back
-    func getCheckpointRollbackCount(targetMessageId: UUID, session: Session) -> Int {
+    /// Get count of messages that would be rolled back
+    func getMessageRollbackCount(targetMessageId: UUID, session: Session) -> Int {
         guard let targetIndex = session.messages.firstIndex(where: { $0.id == targetMessageId }) else {
             return 0
         }
@@ -749,9 +749,9 @@ class SessionService: ObservableObject {
             .count
     }
     
-    /// Rollback all changes from session up to a specific message (legacy method - now uses checkpoint rollback)
+    /// Rollback all changes from session up to a specific message (legacy method - now uses message rollback)
     func rollbackToMessage(targetMessageId: UUID, session: Session) async throws {
-        // Use the new checkpoint-based rollback system
+        // Use the message-based rollback system
         try await rollbackMessage(messageId: targetMessageId, session: session)
     }
     
@@ -800,7 +800,7 @@ class SessionService: ObservableObject {
     }
     
     private func getProject(for projectId: UUID) async -> Project? {
-        return await projectService.projects.first { $0.id == projectId }
+        return await MainActor.run { projectService.projects.first { $0.id == projectId } }
     }
 }
 

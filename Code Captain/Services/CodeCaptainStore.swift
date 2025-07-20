@@ -384,27 +384,6 @@ class CodeCaptainStore: ObservableObject {
         }
     }
     
-    // MARK: - Legacy Checkpoint Management (Deprecated)
-    
-    func getCheckpoints(for session: Session) -> [Checkpoint] {
-        // Legacy checkpoint support - return empty array
-        return []
-    }
-    
-    func getCheckpoint(for messageId: UUID) -> Checkpoint? {
-        // Legacy checkpoint support - return nil
-        return nil
-    }
-    
-    func rollbackToCheckpoint(_ checkpoint: Checkpoint) async {
-        // Legacy checkpoint support - no-op
-        error = "Legacy checkpoint system is deprecated. Use file state rollback instead."
-    }
-    
-    func rollbackToCheckpointSelectively(_ checkpoint: Checkpoint, preservingOtherSessions otherSessionIds: [UUID]) async {
-        // Legacy checkpoint support - no-op
-        error = "Legacy checkpoint system is deprecated. Use file state rollback instead."
-    }
     
     // MARK: - File State Management
     
@@ -424,9 +403,9 @@ class CodeCaptainStore: ObservableObject {
         return sessionService.getMessageFileChangesSummary(messageId: messageId, sessionId: sessionId)
     }
     
-    /// Get count of checkpoints that would be rolled back
-    func getCheckpointRollbackCount(targetMessageId: UUID, session: Session) -> Int {
-        return sessionService.getCheckpointRollbackCount(targetMessageId: targetMessageId, session: session)
+    /// Get count of messages that would be rolled back
+    func getMessageRollbackCount(targetMessageId: UUID, session: Session) -> Int {
+        return sessionService.getMessageRollbackCount(targetMessageId: targetMessageId, session: session)
     }
     
     func rollbackMessage(messageId: UUID, session: Session) async {
@@ -465,16 +444,6 @@ class CodeCaptainStore: ObservableObject {
         return sessionService.previewMessageRollback(messageId: messageId, sessionId: sessionId)
     }
     
-    func previewRollback(toCheckpoint checkpoint: Checkpoint, excludingOtherSessions otherSessionIds: [UUID] = []) -> RollbackPreview {
-        // Legacy checkpoint support - create a dummy preview with the provided checkpoint
-        return RollbackPreview(
-            targetCheckpoint: checkpoint,
-            affectedCheckpoints: [],
-            filesToRevert: [],
-            conflictingFiles: [],
-            protectedCheckpoints: []
-        )
-    }
     
     // MARK: - Cleanup
     

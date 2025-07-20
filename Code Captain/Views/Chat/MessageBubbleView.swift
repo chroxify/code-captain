@@ -169,7 +169,7 @@ struct FileStateResetButton: View {
         .background(Color.gray.opacity(0.08))
         .cornerRadius(6)
         .confirmationDialog(
-            "Reset to Checkpoint",
+            "Reset File Changes",
             isPresented: $showingResetConfirmation,
             titleVisibility: .visible
         ) {
@@ -181,16 +181,16 @@ struct FileStateResetButton: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             VStack(alignment: .leading, spacing: 4) {
-                Text("This will undo all file changes made by the AI after this checkpoint.")
+                Text("This will undo all file changes made by the AI after this message.")
                 
                 if let session = session {
-                    let checkpointCount = store.getCheckpointRollbackCount(targetMessageId: message.id, session: session)
-                    if checkpointCount > 1 {
-                        Text("⚠️ This will reset \(checkpointCount) checkpoints back to this message.")
+                    let changeCount = store.getMessageRollbackCount(targetMessageId: message.id, session: session)
+                    if changeCount > 1 {
+                        Text("⚠️ This will reset \(changeCount) file changes back to this message.")
                             .font(.caption)
                             .foregroundColor(.orange)
                     } else {
-                        Text("This will reset changes from this checkpoint only.")
+                        Text("This will reset file changes from this message only.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -213,7 +213,7 @@ struct FileStateResetButton: View {
             
         } catch {
             // Show error feedback
-            print("Failed to reset file changes: \(error)")
+            Logger.shared.error("Failed to reset file changes: \(error)", category: .fileTracking)
             // TODO: Add error notification
         }
         
