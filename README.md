@@ -1,5 +1,7 @@
 # Code Captain
 
+<img width="2874" height="2210" alt="image" src="https://github.com/user-attachments/assets/b7d1abb5-18d0-4c52-a427-43811ae3d540" />
+
 A comprehensive macOS SwiftUI application that serves as a native desktop wrapper for Claude Code and other AI coding assistants.
 
 ## Features
